@@ -5,6 +5,7 @@ export type NodeKind =
   | "code"
   | "plugin"
   | "knowledge"
+  | "kbimport"
   | "condition";
 
 export interface NodeDef {
@@ -90,10 +91,26 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     kind: "knowledge",
     title: "知识库",
     icon: "📚",
-    description: "输出工作流全局知识库内容",
+    description: "检索 Markdown 知识库内容",
     color: "bg-cyan-500",
     creatable: true,
-    fields: [],
+    fields: [
+      { key: "query", label: "检索词", placeholder: "搜索知识库（标题/标签/正文），可用 {{input}}；留空返回全部笔记" },
+    ],
+  },
+  kbimport: {
+    kind: "kbimport",
+    title: "知识库导入",
+    icon: "📥",
+    description: "导入本地目录/文件到知识库",
+    color: "bg-teal-500",
+    creatable: true,
+    fields: [
+      { key: "path", label: "本地路径（必填）", placeholder: "目录或文件，如 E:\\master\\Assets\\..." },
+      { key: "tag", label: "标签（必填）", placeholder: "如：PTSUnity" },
+      { key: "subTag", label: "子标签（必填）", placeholder: "如：PTSStateMachine" },
+      { key: "presetId", label: "模型（可选，选了则由大模型生成文档）", type: "model" },
+    ],
   },
   condition: {
     kind: "condition",

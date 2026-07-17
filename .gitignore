@@ -42,3 +42,7 @@ next-env.d.ts
 
 # 本地数据（含模型 ApiKey，切勿提交）
 /data/
+
+# Python 转换管线虚拟环境
+/tools/.venv/
+__pycache__/

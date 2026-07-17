@@ -1,6 +1,8 @@
 import vm from "vm";
 import { getPreset } from "./models-store";
 import { createChatModel } from "./llm";
+import { searchKnowledge } from "./knowledge";
+import { importToKnowledge } from "./kb-import";
 import type { NodeKind } from "@/components/workflow/nodeDefs";
 
 export interface RunNode {
@@ -257,10 +259,24 @@ export async function runWorkflow(
             params: config.params ?? null,
           };
           break;
-        case "knowledge":
-          // 输出工作流全局知识库，供下游直接使用
-          output = knowledge;
+        case "knowledge": {
+          // 检索知识库：query 支持模板变量；为空则返回全部笔记摘要
+          const query = renderTemplate(config.query ?? "", input, outputs, labels, knowledge);
+          const hits = await searchKnowledge(query);
+          output = hits;
           break;
+        }
+        case "kbimport": {
+          // 导入本地目录/文件到知识库，标签与子标签为必填
+          const targetPath = (config.path ?? "").trim();
+          const tag = (config.tag ?? "").trim();
+          const subTag = (config.subTag ?? "").trim();
+          if (!targetPath) throw new Error("未填写本地路径");
+          if (!tag) throw new Error("未填写标签（必填）");
+          if (!subTag) throw new Error("未填写子标签（必填）");
+          output = await importToKnowledge(targetPath, tag, subTag, config.presetId || undefined);
+          break;
+        }
         case "end":
           output = config.output
             ? renderTemplate(config.output, input, outputs, labels, knowledge)
