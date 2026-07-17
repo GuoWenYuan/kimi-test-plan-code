@@ -141,6 +141,7 @@ async function llmDoc(model: ChatModel, file: string, material: string): Promise
  * - 生成总览索引笔记（[[双链]] 指向全部导入笔记），图谱由此自动形成
  */
 export async function importToKnowledge(
+  userId: string,
   targetPath: string,
   tag: string,
   subTag: string,
@@ -148,7 +149,7 @@ export async function importToKnowledge(
 ): Promise<ImportResult> {
   let model: ChatModel | null = null;
   if (presetId) {
-    const preset = await getPreset(presetId);
+    const preset = await getPreset(userId, presetId);
     if (!preset) throw new Error("所选模型预设不存在，可能已被删除");
     model = createChatModel(preset);
   }
@@ -190,7 +191,7 @@ export async function importToKnowledge(
 
       const slug = `${group}/${base}`;
       const note = `# ${base}\n\n#${tag} #${subTag}\n\n> 来源：${file}\n\n---\n\n${body.slice(0, MAX_CONTENT_CHARS)}\n\n---\n\n所属：[[${subTag}总览]]\n`;
-      await createNote(slug, note);
+      await createNote(userId, slug, note);
       slugs.push(slug);
     };
 
@@ -209,6 +210,7 @@ export async function importToKnowledge(
       .map((s) => `- [[${s.split("/").pop()}]]`)
       .join("\n");
     await createNote(
+      userId,
       indexSlug,
       `# ${subTag} 总览\n\n#${tag} #${subTag}\n\n> 来源：${targetPath}\n\n## 包含笔记（${slugs.length}）\n\n${list}\n`
     );

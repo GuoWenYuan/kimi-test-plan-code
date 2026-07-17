@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPreset } from "@/lib/models-store";
 import { createChatModel } from "@/lib/llm";
+import { getCurrentUser } from "@/lib/auth";
 
 const SYSTEM_PROMPT = `你是工作流节点生成器。根据用户需求生成一个可复用的工作流节点定义，严格输出 JSON，不要输出任何其他文字。
 
@@ -25,6 +26,8 @@ interface GenSpec {
 }
 
 export async function POST(req: Request) {
+  const user = await getCurrentUser(req);
+  if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
   const body = await req.json().catch(() => null);
   const { requirement, presetId } = body ?? {};
   if (!requirement || typeof requirement !== "string") {
@@ -33,7 +36,7 @@ export async function POST(req: Request) {
   if (!presetId) {
     return NextResponse.json({ error: "请选择模型预设" }, { status: 400 });
   }
-  const preset = await getPreset(presetId);
+  const preset = await getPreset(user.id, presetId);
   if (!preset) {
     return NextResponse.json({ error: "模型预设不存在" }, { status: 404 });
   }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPreset } from "@/lib/models-store";
 import { createChatModel } from "@/lib/llm";
+import { getCurrentUser } from "@/lib/auth";
 import { NODE_DEFS, type NodeKind } from "@/components/workflow/nodeDefs";
 
 const KIND_DESC = (Object.keys(NODE_DEFS) as NodeKind[])
@@ -83,6 +84,8 @@ function sanitize(raw: unknown): GenGraph {
 }
 
 export async function POST(req: Request) {
+  const user = await getCurrentUser(req);
+  if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
   const body = await req.json().catch(() => null);
   const { requirement, presetId } = body ?? {};
   if (!requirement || typeof requirement !== "string") {
@@ -91,7 +94,7 @@ export async function POST(req: Request) {
   if (!presetId) {
     return NextResponse.json({ error: "请选择模型预设" }, { status: 400 });
   }
-  const preset = await getPreset(presetId);
+  const preset = await getPreset(user.id, presetId);
   if (!preset) {
     return NextResponse.json({ error: "模型预设不存在" }, { status: 404 });
   }

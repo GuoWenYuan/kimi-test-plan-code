@@ -36,6 +36,7 @@ export default function KnowledgePage() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [newSlug, setNewSlug] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [needLogin, setNeedLogin] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,6 +62,10 @@ export default function KnowledgePage() {
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/knowledge");
+    if (res.status === 401) {
+      setNeedLogin(true);
+      return;
+    }
     const data = await res.json();
     setNotes(data.notes ?? []);
     setGraph(data.graph ?? { nodes: [], edges: [] });
@@ -278,6 +283,20 @@ export default function KnowledgePage() {
       })),
     [graph.edges]
   );
+
+  if (needLogin) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3">
+        <p className="text-sm text-neutral-500">知识库为个人数据，请先登录</p>
+        <a
+          href="/login"
+          className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm text-white hover:bg-neutral-700"
+        >
+          去登录
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full">

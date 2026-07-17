@@ -27,9 +27,15 @@ export default function ModelsPage() {
   const [testResult, setTestResult] = useState<Record<string, string>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [needLogin, setNeedLogin] = useState(false);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/models");
+    if (res.status === 401) {
+      setNeedLogin(true);
+      setLoading(false);
+      return;
+    }
     setPresets(await res.json());
     setLoading(false);
   }, []);
@@ -85,6 +91,20 @@ export default function ModelsPage() {
       setTestingId(null);
     }
   };
+
+  if (needLogin) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3">
+        <p className="text-sm text-neutral-500">模型预设为个人数据，请先登录</p>
+        <a
+          href="/login"
+          className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm text-white hover:bg-neutral-700"
+        >
+          去登录
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto h-full max-w-3xl overflow-y-auto p-6">

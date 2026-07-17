@@ -125,13 +125,14 @@ function topoSort(nodes: RunNode[], edges: RunEdge[]): RunNode[] {
 }
 
 async function execLlm(
+  userId: string,
   node: RunNode,
   prompt: string,
   onDelta?: (delta: string) => void
 ): Promise<JsonValue> {
   const presetId = node.data.config.presetId;
   if (!presetId) throw new Error("未选择模型预设，请在节点配置中选择");
-  const preset = await getPreset(presetId);
+  const preset = await getPreset(userId, presetId);
   if (!preset) throw new Error("所选模型预设不存在，可能已被删除");
   const model = createChatModel(preset);
 
@@ -192,7 +193,8 @@ export async function runWorkflow(
   edges: RunEdge[],
   userInput: string,
   knowledgeRaw = "",
-  emit?: (e: RunEvent) => void
+  emit?: (e: RunEvent) => void,
+  userId = ""
 ): Promise<RunResponse> {
   const results: Record<string, NodeResult> = {};
   const outputs = new Map<string, unknown>();
@@ -269,7 +271,7 @@ export async function runWorkflow(
           if (!/\{\{\s*input/.test(config.prompt ?? "")) {
             prompt += `\n\n输入数据：${inline(input)}`;
           }
-          output = await execLlm(node, prompt, (delta) =>
+          output = await execLlm(userId, node, prompt, (delta) =>
             emit?.({ type: "node_delta", nodeId: node.id, delta })
           );
           break;
@@ -303,7 +305,7 @@ export async function runWorkflow(
         case "knowledge": {
           // 检索知识库：query 支持模板变量；为空则返回全部笔记摘要
           const query = renderTemplate(config.query ?? "", input, outputs, labels, knowledge);
-          const hits = await searchKnowledge(query);
+          const hits = await searchKnowledge(userId, query);
           output = hits;
           break;
         }
@@ -315,7 +317,7 @@ export async function runWorkflow(
           if (!targetPath) throw new Error("未填写本地路径");
           if (!tag) throw new Error("未填写标签（必填）");
           if (!subTag) throw new Error("未填写子标签（必填）");
-          output = await importToKnowledge(targetPath, tag, subTag, config.presetId || undefined);
+          output = await importToKnowledge(userId, targetPath, tag, subTag, config.presetId || undefined);
           break;
         }
         case "custom": {
@@ -327,7 +329,7 @@ export async function runWorkflow(
             if (!/\{\{\s*input/.test(def.content)) {
               prompt += `\n\n输入数据：${inline(input)}`;
             }
-            output = await execLlm(node, prompt, (delta) =>
+            output = await execLlm(userId, node, prompt, (delta) =>
               emit?.({ type: "node_delta", nodeId: node.id, delta })
             );
           } else {

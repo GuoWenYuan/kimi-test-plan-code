@@ -1,10 +1,15 @@
 import { runWorkflow, type RunEdge, type RunEvent, type RunNode } from "@/lib/workflow-engine";
+import { getCurrentUser } from "@/lib/auth";
 
 /**
  * 运行工作流：SSE 流式返回执行过程。
  * 事件：node_start / node_delta / node_end / done，格式为 SSE `data: <json>\n\n`
  */
 export async function POST(req: Request) {
+  const user = await getCurrentUser(req);
+  if (!user) {
+    return Response.json({ error: "未登录" }, { status: 401 });
+  }
   const body = await req.json().catch(() => null);
   const { nodes, edges, input } = body ?? {};
   if (!Array.isArray(nodes) || !Array.isArray(edges)) {
@@ -25,7 +30,8 @@ export async function POST(req: Request) {
     edges as RunEdge[],
     typeof input === "string" ? input : "",
     typeof body.knowledge === "string" ? body.knowledge : "",
-    send
+    send,
+    user.id
   )
     .catch((e) => send({ type: "fatal", error: e instanceof Error ? e.message : String(e) }))
     .finally(() => writer.close().catch(() => {}));

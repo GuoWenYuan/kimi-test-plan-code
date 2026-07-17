@@ -4,6 +4,7 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import { createNote, readNote } from "@/lib/knowledge";
 
 const execFileAsync = promisify(execFile);
@@ -11,16 +12,18 @@ const execFileAsync = promisify(execFile);
 const SUPPORTED = [".md", ".txt", ".docx", ".doc", ".xmind", ".drawio", ".xls"];
 
 /** 生成不冲突的 slug：重名时追加 -2、-3… */
-async function uniqueSlug(base: string): Promise<string> {
+async function uniqueSlug(userId: string, base: string): Promise<string> {
   const clean = base.replace(/\.[^.]+$/, "").trim() || "未命名";
-  if ((await readNote(clean)) === null) return clean;
+  if ((await readNote(userId, clean)) === null) return clean;
   for (let i = 2; ; i++) {
     const candidate = `${clean}-${i}`;
-    if ((await readNote(candidate)) === null) return candidate;
+    if ((await readNote(userId, candidate)) === null) return candidate;
   }
 }
 
 export async function POST(req: Request) {
+  const user = await getCurrentUser(req);
+  if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
   if (!(file instanceof File)) {
@@ -59,9 +62,9 @@ export async function POST(req: Request) {
       body = await fs.readFile(outputPath, "utf-8");
     }
 
-    const slug = await uniqueSlug(file.name);
+    const slug = await uniqueSlug(user.id, file.name);
     const title = path.basename(file.name, ext);
-    await createNote(slug, `# ${title}\n\n${body}`);
+    await createNote(user.id, slug, `# ${title}\n\n${body}`);
     return NextResponse.json({ ok: true, slug }, { status: 201 });
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });
