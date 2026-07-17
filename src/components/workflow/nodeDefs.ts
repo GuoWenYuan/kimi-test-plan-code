@@ -6,6 +6,7 @@ export type NodeKind =
   | "plugin"
   | "knowledge"
   | "kbimport"
+  | "custom"
   | "condition";
 
 export interface NodeDef {
@@ -111,6 +112,15 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
       { key: "subTag", label: "子标签（必填）", placeholder: "如：PTSStateMachine" },
       { key: "presetId", label: "模型（可选，选了则由大模型生成文档）", type: "model" },
     ],
+  },
+  custom: {
+    kind: "custom",
+    title: "自定义",
+    icon: "✨",
+    description: "AI 生成的自定义节点",
+    color: "bg-fuchsia-500",
+    creatable: false,
+    fields: [],
   },
   condition: {
     kind: "condition",

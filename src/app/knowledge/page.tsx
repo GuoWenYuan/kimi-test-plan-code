@@ -117,6 +117,66 @@ export default function KnowledgePage() {
     openNote(slug);
   };
 
+  const deleteTag = async (tag: string) => {
+    const count = notes.filter((n) => n.tags.includes(tag)).length;
+    if (
+      !confirm(
+        `确定删除标签「#${tag}」及其下的 ${count} 篇笔记？\n（带其他标签的笔记也会被一并删除，不可恢复）`
+      )
+    )
+      return;
+    await fetch(`/api/knowledge/tags/${encodeURIComponent(tag)}?mode=notes`, {
+      method: "DELETE",
+    });
+    setActiveSlug(null);
+    setContent("");
+    refresh();
+  };
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggleSelect = (slug: string) => {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  };
+
+  const deleteSelected = async () => {
+    if (selected.size === 0) return;
+    if (!confirm(`确定删除选中的 ${selected.size} 篇笔记？不可恢复。`)) return;
+    for (const slug of selected) {
+      await fetch(`/api/knowledge/${encodeURIComponent(slug)}`, { method: "DELETE" });
+    }
+    if (activeSlug && selected.has(activeSlug)) {
+      setActiveSlug(null);
+      setContent("");
+    }
+    setSelected(new Set());
+    setSelectMode(false);
+    refresh();
+  };
+
+  // 拖拽框选：按住下拉连续选中
+  const dragging = useRef(false);
+  const dragAdd = (slug: string) =>
+    setSelected((s) => {
+      if (s.has(slug)) return s;
+      const next = new Set(s);
+      next.add(slug);
+      return next;
+    });
+  useEffect(() => {
+    const up = () => {
+      dragging.current = false;
+    };
+    document.addEventListener("mouseup", up);
+    return () => document.removeEventListener("mouseup", up);
+  }, []);
+
   const visible = notes.filter(
     (n) =>
       !search ||
@@ -260,12 +320,54 @@ export default function KnowledgePage() {
               onChange={upload}
             />
           </div>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => {
+                setSelectMode((v) => !v);
+                setSelected(new Set());
+              }}
+              className={`rounded-md px-2 py-1 text-xs ${
+                selectMode
+                  ? "bg-neutral-900 text-white"
+                  : "border border-neutral-200 text-neutral-600 hover:bg-neutral-100"
+              }`}
+            >
+              {selectMode ? "退出多选" : "多选"}
+            </button>
+            {selectMode && (
+              <span className="text-xs text-neutral-400">已选 {selected.size} 篇</span>
+            )}
+          </div>
         </div>
-        <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
+        <div
+          className={`flex-1 space-y-0.5 overflow-y-auto p-2 ${selectMode ? "select-none" : ""}`}
+          onMouseDown={(e) => {
+            if (!selectMode) return;
+            const el = (e.target as HTMLElement).closest("[data-slug]");
+            if (!el) return;
+            dragging.current = true;
+            dragAdd(el.getAttribute("data-slug")!);
+          }}
+          onMouseMove={(e) => {
+            if (!selectMode || !dragging.current) return;
+            const el = document
+              .elementFromPoint(e.clientX, e.clientY)
+              ?.closest("[data-slug]");
+            if (el) dragAdd(el.getAttribute("data-slug")!);
+          }}
+        >
           {search ? (
             <>
               {visible.map((n) => (
-                <NoteButton key={n.slug} note={n} activeSlug={activeSlug} onOpen={openNote} />
+                <NoteButton
+                  key={n.slug}
+                  note={n}
+                  activeSlug={activeSlug}
+                  onOpen={openNote}
+                  selectable={selectMode}
+                  checked={selected.has(n.slug)}
+                  onToggle={toggleSelect}
+                />
               ))}
               {visible.length === 0 && (
                 <p className="px-3 py-6 text-center text-xs text-neutral-400">没有匹配的笔记</p>
@@ -283,6 +385,10 @@ export default function KnowledgePage() {
                 toggleGroup={toggleGroup}
                 activeSlug={activeSlug}
                 onOpen={openNote}
+                onDeleteTag={deleteTag}
+                selectable={selectMode}
+                selected={selected}
+                onToggle={toggleSelect}
               />
             ))
           )}
@@ -290,6 +396,25 @@ export default function KnowledgePage() {
             <p className="px-3 py-6 text-center text-xs text-neutral-400">暂无笔记</p>
           )}
         </div>
+        {selectMode && selected.size > 0 && (
+          <div className="flex gap-2 border-t border-neutral-200 p-2">
+            <button
+              onClick={deleteSelected}
+              className="flex-1 rounded-md bg-rose-600 px-3 py-1.5 text-xs text-white hover:bg-rose-500"
+            >
+              删除选中（{selected.size}）
+            </button>
+            <button
+              onClick={() => {
+                setSelected(new Set());
+                setSelectMode(false);
+              }}
+              className="rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-100"
+            >
+              取消
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 编辑区 / 图谱 */}
@@ -389,27 +514,48 @@ function NoteButton({
   note,
   activeSlug,
   onOpen,
+  selectable,
+  checked,
+  onToggle,
 }: {
   note: NoteMeta;
   activeSlug: string | null;
   onOpen: (slug: string) => void;
+  selectable?: boolean;
+  checked?: boolean;
+  onToggle?: (slug: string) => void;
 }) {
   return (
-    <button
-      onClick={() => onOpen(note.slug)}
-      className={`w-full rounded-md px-3 py-2 text-left text-sm ${
-        activeSlug === note.slug
+    <div
+      data-slug={note.slug}
+      className={`flex w-full items-center rounded-md text-left text-sm ${
+        activeSlug === note.slug && !selectable
           ? "bg-neutral-900 text-white"
           : "text-neutral-700 hover:bg-neutral-100"
-      }`}
+      } ${checked ? "bg-blue-50" : ""}`}
     >
-      <div className="truncate">{note.title}</div>
-      <div
-        className={`mt-0.5 text-xs ${activeSlug === note.slug ? "text-neutral-300" : "text-neutral-400"}`}
+      {selectable && (
+        <input
+          type="checkbox"
+          checked={checked ?? false}
+          onChange={() => onToggle?.(note.slug)}
+          className="ml-2 shrink-0"
+        />
+      )}
+      <button
+        onClick={() => {
+          if (!selectable) onOpen(note.slug);
+        }}
+        className="min-w-0 flex-1 px-3 py-2 text-left"
       >
-        链接 {note.linkCount} · 反链 {note.backlinkCount}
-      </div>
-    </button>
+        <div className="truncate">{note.title}</div>
+        <div
+          className={`mt-0.5 text-xs ${activeSlug === note.slug && !selectable ? "text-neutral-300" : "text-neutral-400"}`}
+        >
+          链接 {note.linkCount} · 反链 {note.backlinkCount}
+        </div>
+      </button>
+    </div>
   );
 }
 
@@ -422,6 +568,10 @@ function TagGroup({
   toggleGroup,
   activeSlug,
   onOpen,
+  onDeleteTag,
+  selectable,
+  selected,
+  onToggle,
 }: {
   tag: string;
   depth: number;
@@ -431,6 +581,10 @@ function TagGroup({
   toggleGroup: (tag: string) => void;
   activeSlug: string | null;
   onOpen: (slug: string) => void;
+  onDeleteTag: (tag: string) => void;
+  selectable?: boolean;
+  selected?: Set<string>;
+  onToggle?: (slug: string) => void;
 }) {
   const subs = childrenMap.get(tag) ?? [];
   const direct = directMap.get(tag) ?? [];
@@ -449,15 +603,26 @@ function TagGroup({
 
   return (
     <div className="mb-1" style={{ marginLeft: depth > 0 ? 12 : 0 }}>
-      <button
-        onClick={() => toggleGroup(tag)}
-        className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100"
-      >
-        <span className="truncate">
-          {isCollapsed(tag) ? "▸" : "▾"} #{tag}
-        </span>
-        <span className="text-neutral-400">{total}</span>
-      </button>
+      <div className="group flex items-center">
+        <button
+          onClick={() => toggleGroup(tag)}
+          className="flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100"
+        >
+          <span className="truncate">
+            {isCollapsed(tag) ? "▸" : "▾"} #{tag}
+          </span>
+          <span className="text-neutral-400">{total}</span>
+        </button>
+        {tag !== "未分类" && (
+          <button
+            onClick={() => onDeleteTag(tag)}
+            className="hidden shrink-0 rounded px-1 text-xs text-neutral-400 hover:text-rose-600 group-hover:block"
+            title={`删除标签 #${tag}`}
+          >
+            ✕
+          </button>
+        )}
+      </div>
       {!isCollapsed(tag) && (
         <>
           {subs.map((c) => (
@@ -471,10 +636,22 @@ function TagGroup({
               toggleGroup={toggleGroup}
               activeSlug={activeSlug}
               onOpen={onOpen}
+              onDeleteTag={onDeleteTag}
+              selectable={selectable}
+              selected={selected}
+              onToggle={onToggle}
             />
           ))}
           {direct.map((n) => (
-            <NoteButton key={`${tag}-${n.slug}`} note={n} activeSlug={activeSlug} onOpen={onOpen} />
+            <NoteButton
+              key={`${tag}-${n.slug}`}
+              note={n}
+              activeSlug={activeSlug}
+              onOpen={onOpen}
+              selectable={selectable}
+              checked={selected?.has(n.slug)}
+              onToggle={onToggle}
+            />
           ))}
         </>
       )}

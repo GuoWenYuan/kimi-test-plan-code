@@ -192,6 +192,47 @@ export interface KnowledgeSearchHit {
   content: string;
 }
 
+/** 从所有笔记中移除指定标签（#tag 出现处），返回修改的笔记数 */
+export async function removeTagFromAllNotes(tag: string): Promise<number> {
+  const files = await listMdFiles(KB_DIR);
+  const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`#${escaped}(?![\\w\\u4e00-\\u9fa5-])`, "g");
+  let changed = 0;
+  for (const f of files) {
+    const content = await fs.readFile(f, "utf-8");
+    if (!re.test(content)) continue;
+    const next = content
+      .replace(re, "")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/^[ \t]+$/gm, "")
+      .replace(/\n{3,}/g, "\n\n");
+    await fs.writeFile(f, next, "utf-8");
+    changed++;
+  }
+  if (changed > 0) await invalidate();
+  return changed;
+}
+
+/** 删除带有指定标签的所有笔记文件，返回删除的笔记数 */
+export async function deleteNotesByTag(tag: string): Promise<number> {
+  const foam = await getFoam();
+  const targets = foam.workspace
+    .list()
+    .filter((r) => r.tags.some((t) => t.label === tag))
+    .map((r) => r.uri.toFsPath());
+  let deleted = 0;
+  for (const f of targets) {
+    try {
+      await fs.unlink(f);
+      deleted++;
+    } catch {
+      // 单个失败不中断
+    }
+  }
+  if (deleted > 0) await invalidate();
+  return deleted;
+}
+
 /** 供工作流知识库节点使用：按检索词搜索笔记（标题/标签/正文），返回最匹配的内容 */
 export async function searchKnowledge(query: string, limit = 3): Promise<KnowledgeSearchHit[]> {
   const foam = await getFoam();

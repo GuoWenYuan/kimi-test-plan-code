@@ -3,6 +3,7 @@ import { getPreset } from "./models-store";
 import { createChatModel } from "./llm";
 import { searchKnowledge } from "./knowledge";
 import { importToKnowledge } from "./kb-import";
+import { getCustomNode } from "./custom-nodes-store";
 import type { NodeKind } from "@/components/workflow/nodeDefs";
 
 export interface RunNode {
@@ -29,6 +30,13 @@ export interface RunResponse {
   results: Record<string, NodeResult>;
   finalOutput?: string;
 }
+
+/** 运行过程事件（用于流式输出） */
+export type RunEvent =
+  | { type: "node_start"; nodeId: string; label: string }
+  | { type: "node_delta"; nodeId: string; delta: string }
+  | { type: "node_end"; nodeId: string; label: string; result: NodeResult }
+  | { type: "done"; results: Record<string, NodeResult>; finalOutput?: string };
 
 /** 节点间流转的数据统一为 JSON 值 */
 type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
@@ -116,14 +124,41 @@ function topoSort(nodes: RunNode[], edges: RunEdge[]): RunNode[] {
   return order;
 }
 
-async function execLlm(node: RunNode, prompt: string): Promise<JsonValue> {
+async function execLlm(
+  node: RunNode,
+  prompt: string,
+  onDelta?: (delta: string) => void
+): Promise<JsonValue> {
   const presetId = node.data.config.presetId;
   if (!presetId) throw new Error("未选择模型预设，请在节点配置中选择");
   const preset = await getPreset(presetId);
   if (!preset) throw new Error("所选模型预设不存在，可能已被删除");
   const model = createChatModel(preset);
-  const res = await model.invoke(prompt);
-  const text = typeof res.content === "string" ? res.content : JSON.stringify(res.content);
+
+  let text: string;
+  if (onDelta) {
+    // 流式输出：逐 token 回调
+    text = "";
+    const stream = await model.stream(prompt);
+    for await (const chunk of stream) {
+      const delta =
+        typeof chunk.content === "string" ? chunk.content : JSON.stringify(chunk.content);
+      if (delta) {
+        text += delta;
+        onDelta(delta);
+      }
+    }
+    // 部分提供方不支持 SSE 流式（静默返回空），回退为一次性调用
+    if (!text) {
+      const res = await model.invoke(prompt);
+      text = typeof res.content === "string" ? res.content : JSON.stringify(res.content);
+      if (text) onDelta(text);
+    }
+  } else {
+    const res = await model.invoke(prompt);
+    text = typeof res.content === "string" ? res.content : JSON.stringify(res.content);
+  }
+
   // 模型若返回 JSON 文本则解析为结构化数据，便于下游取字段
   try {
     return JSON.parse(text) as JsonValue;
@@ -156,7 +191,8 @@ export async function runWorkflow(
   nodes: RunNode[],
   edges: RunEdge[],
   userInput: string,
-  knowledgeRaw = ""
+  knowledgeRaw = "",
+  emit?: (e: RunEvent) => void
 ): Promise<RunResponse> {
   const results: Record<string, NodeResult> = {};
   const outputs = new Map<string, unknown>();
@@ -192,8 +228,11 @@ export async function runWorkflow(
 
     if (kind !== "start" && !isActive(node.id)) {
       results[node.id] = { status: "skipped" };
+      emit?.({ type: "node_end", nodeId: node.id, label: node.data.label, result: results[node.id] });
       continue;
     }
+
+    emit?.({ type: "node_start", nodeId: node.id, label: node.data.label });
 
     // 汇聚上游输出：单上游直传其值；多上游合并为 { 节点名: 输出 }
     const upstream = edges
@@ -230,7 +269,9 @@ export async function runWorkflow(
           if (!/\{\{\s*input/.test(config.prompt ?? "")) {
             prompt += `\n\n输入数据：${inline(input)}`;
           }
-          output = await execLlm(node, prompt);
+          output = await execLlm(node, prompt, (delta) =>
+            emit?.({ type: "node_delta", nodeId: node.id, delta })
+          );
           break;
         }
         case "code":
@@ -277,6 +318,23 @@ export async function runWorkflow(
           output = await importToKnowledge(targetPath, tag, subTag, config.presetId || undefined);
           break;
         }
+        case "custom": {
+          // AI 生成的自定义节点：llm 模式执行提示词，code 模式执行代码
+          const def = await getCustomNode(config.customId ?? "");
+          if (!def) throw new Error("自定义节点定义不存在，可能已被删除");
+          if (def.mode === "llm") {
+            let prompt = renderTemplate(def.content, input, outputs, labels, knowledge);
+            if (!/\{\{\s*input/.test(def.content)) {
+              prompt += `\n\n输入数据：${inline(input)}`;
+            }
+            output = await execLlm(node, prompt, (delta) =>
+              emit?.({ type: "node_delta", nodeId: node.id, delta })
+            );
+          } else {
+            output = execCode(def.content, input, Object.fromEntries(outputs), knowledge);
+          }
+          break;
+        }
         case "end":
           output = config.output
             ? renderTemplate(config.output, input, outputs, labels, knowledge)
@@ -286,6 +344,7 @@ export async function runWorkflow(
 
       outputs.set(node.id, output);
       results[node.id] = { status: "success", output: serialize(output) };
+      emit?.({ type: "node_end", nodeId: node.id, label: node.data.label, result: results[node.id] });
 
       if (kind !== "condition") {
         for (const e of edges.filter((e) => e.source === node.id)) {
@@ -294,12 +353,15 @@ export async function runWorkflow(
       }
     } catch (e) {
       results[node.id] = { status: "error", error: e instanceof Error ? e.message : String(e) };
+      emit?.({ type: "node_end", nodeId: node.id, label: node.data.label, result: results[node.id] });
     }
   }
 
   const endNode = nodes.find((n) => n.data.kind === "end");
-  return {
+  const response: RunResponse = {
     results,
     finalOutput: endNode && outputs.has(endNode.id) ? serialize(outputs.get(endNode.id)) : undefined,
   };
+  emit?.({ type: "done", results, finalOutput: response.finalOutput });
+  return response;
 }

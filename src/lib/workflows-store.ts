@@ -11,6 +11,7 @@ export interface WorkflowGraph {
 export interface WorkflowTemplate {
   id: string;
   name: string;
+  tag: string;
   graph: WorkflowGraph;
   createdAt: string;
 }
@@ -21,7 +22,9 @@ const FILE = path.join(DATA_DIR, "workflows.json");
 async function readAll(): Promise<WorkflowTemplate[]> {
   try {
     const raw = await fs.readFile(FILE, "utf-8");
-    return JSON.parse(raw) as WorkflowTemplate[];
+    const list = JSON.parse(raw) as WorkflowTemplate[];
+    // 兼容旧数据：无 tag 字段归入默认
+    return list.map((t) => ({ ...t, tag: t.tag || "默认" }));
   } catch {
     return [];
   }
@@ -38,12 +41,14 @@ export async function listWorkflows(): Promise<WorkflowTemplate[]> {
 
 export async function createWorkflow(
   name: string,
-  graph: WorkflowGraph
+  graph: WorkflowGraph,
+  tag = "默认"
 ): Promise<WorkflowTemplate> {
   const list = await readAll();
   const tpl: WorkflowTemplate = {
     id: crypto.randomUUID(),
     name,
+    tag,
     graph,
     createdAt: new Date().toISOString(),
   };

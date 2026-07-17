@@ -7,6 +7,8 @@ export type WorkNodeData = {
   kind: NodeKind;
   label: string;
   config: Record<string, string>;
+  /** 自定义节点的描述（来自节点定义） */
+  description?: string;
   /** 最近一次运行的状态，用于节点高亮 */
   runStatus?: "running" | "success" | "error" | "skipped";
 };
@@ -71,7 +73,7 @@ export default function WorkNodeView({ data, selected }: NodeProps<WorkNode>) {
             </div>
           </div>
         ) : (
-          def.description
+          data.description ?? def.description
         )}
       </div>
 

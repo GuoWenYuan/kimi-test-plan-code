@@ -17,6 +17,14 @@ interface PromptTemplate {
   group: string;
 }
 
+interface CustomNodeDefLite {
+  id: string;
+  name: string;
+  description: string;
+  mode: "llm" | "code";
+  content: string;
+}
+
 interface Props {
   node: WorkNode | null;
   onChange: (id: string, patch: { label?: string; config?: Record<string, string> }) => void;
@@ -28,6 +36,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
   const [presets, setPresets] = useState<ModelPreset[]>([]);
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [templateId, setTemplateId] = useState("");
+  const [customDefs, setCustomDefs] = useState<CustomNodeDefLite[]>([]);
 
   useEffect(() => {
     fetch("/api/models")
@@ -38,10 +47,18 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
       .then((r) => r.json())
       .then((data) => setTemplates(Array.isArray(data?.templates) ? data.templates : []))
       .catch(() => setTemplates([]));
+    fetch("/api/custom-nodes")
+      .then((r) => r.json())
+      .then((data) => setCustomDefs(Array.isArray(data) ? data : []))
+      .catch(() => setCustomDefs([]));
   }, []);
 
   if (!node) return null;
   const def = NODE_DEFS[node.data.kind];
+  const customDef =
+    node.data.kind === "custom"
+      ? customDefs.find((d) => d.id === node.data.config.customId)
+      : undefined;
 
   const importTemplate = () => {
     const tpl = templates.find((t) => t.id === templateId);
@@ -79,6 +96,41 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
             className="w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
           />
         </label>
+
+        {node.data.kind === "custom" && customDef && (
+          <>
+            <div className="rounded-md border border-fuchsia-100 bg-fuchsia-50/50 p-3 text-xs text-neutral-600">
+              <div className="font-medium text-fuchsia-700">
+                {customDef.mode === "llm" ? "✨ 大模型节点" : "🧮 代码节点"}
+              </div>
+              <div className="mt-1">{customDef.description}</div>
+              <pre className="mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded bg-white p-2">
+                {customDef.content}
+              </pre>
+            </div>
+            {customDef.mode === "llm" && (
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-neutral-500">模型</span>
+                <select
+                  value={node.data.config.presetId ?? ""}
+                  onChange={(e) =>
+                    onChange(node.id, {
+                      config: { ...node.data.config, presetId: e.target.value },
+                    })
+                  }
+                  className="w-full rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                >
+                  <option value="">未选择</option>
+                  {presets.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}（{p.model}）
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </>
+        )}
 
         {def.fields.map((field) => (
           <label key={field.key} className="block">

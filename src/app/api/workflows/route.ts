@@ -15,6 +15,6 @@ export async function POST(req: Request) {
     nodes: graph.nodes,
     edges: Array.isArray(graph.edges) ? graph.edges : [],
     knowledge: typeof graph.knowledge === "string" ? graph.knowledge : "",
-  });
+  }, typeof body.tag === "string" && body.tag.trim() ? body.tag.trim() : undefined);
   return NextResponse.json(tpl, { status: 201 });
 }
