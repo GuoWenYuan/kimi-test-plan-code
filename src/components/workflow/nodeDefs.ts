@@ -17,7 +17,14 @@ export interface NodeDef {
   /** 是否可拖入画布新创建（开始/结束节点默认存在，不出现在添加面板） */
   creatable: boolean;
   /** 配置面板字段 */
-  fields: { key: string; label: string; placeholder?: string; multiline?: boolean }[];
+  fields: {
+    key: string;
+    label: string;
+    placeholder?: string;
+    multiline?: boolean;
+    /** model：渲染为模型预设下拉选择 */
+    type?: "text" | "model";
+  }[];
 }
 
 export const NODE_DEFS: Record<NodeKind, NodeDef> = {
@@ -40,7 +47,7 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     color: "bg-rose-500",
     creatable: false,
     fields: [
-      { key: "output", label: "输出内容", placeholder: "如：{{llm.output}}", multiline: true },
+      { key: "output", label: "输出内容", placeholder: "如：{{input}} 或 {{节点名.field}}，留空则原样输出上游数据", multiline: true },
     ],
   },
   llm: {
@@ -51,8 +58,8 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     color: "bg-blue-500",
     creatable: true,
     fields: [
-      { key: "model", label: "模型", placeholder: "如：kimi-k2" },
-      { key: "prompt", label: "提示词", placeholder: "输入提示词，可用 {{变量}} 引用上游输出", multiline: true },
+      { key: "presetId", label: "模型", type: "model" },
+      { key: "prompt", label: "提示词", placeholder: "可用 {{input}} / {{节点名}} / {{knowledge}}（全局知识库）引用数据；不写 {{input}} 时自动附加上游数据", multiline: true },
     ],
   },
   code: {
@@ -63,8 +70,8 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     color: "bg-violet-500",
     creatable: true,
     fields: [
-      { key: "language", label: "语言", placeholder: "javascript / python" },
-      { key: "code", label: "代码", placeholder: "编写处理逻辑", multiline: true },
+      { key: "language", label: "语言", placeholder: "javascript" },
+      { key: "code", label: "代码", placeholder: 'input / outputs 均为 JSON 值\n结果赋值给 output，如：\noutput = { summary: input.text.toUpperCase() }', multiline: true },
     ],
   },
   plugin: {
@@ -83,13 +90,10 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     kind: "knowledge",
     title: "知识库",
     icon: "📚",
-    description: "检索知识库内容",
+    description: "输出工作流全局知识库内容",
     color: "bg-cyan-500",
     creatable: true,
-    fields: [
-      { key: "dataset", label: "知识库", placeholder: "选择要检索的知识库" },
-      { key: "query", label: "检索内容", placeholder: "可用 {{变量}} 引用上游输出" },
-    ],
+    fields: [],
   },
   condition: {
     kind: "condition",
@@ -99,7 +103,7 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     color: "bg-orange-500",
     creatable: true,
     fields: [
-      { key: "expression", label: "条件表达式", placeholder: "如：{{llm.score}} > 0.5", multiline: true },
+      { key: "expression", label: "条件表达式", placeholder: 'input 为 JSON 值，如：input.score > 0.5', multiline: true },
     ],
   },
 };

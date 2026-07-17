@@ -1,7 +1,21 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { NODE_DEFS } from "./nodeDefs";
 import type { WorkNode } from "./WorkNodeView";
+
+interface ModelPreset {
+  id: string;
+  name: string;
+  model: string;
+}
+
+interface PromptTemplate {
+  id: string;
+  name: string;
+  content: string;
+  group: string;
+}
 
 interface Props {
   node: WorkNode | null;
@@ -11,8 +25,30 @@ interface Props {
 }
 
 export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props) {
+  const [presets, setPresets] = useState<ModelPreset[]>([]);
+  const [templates, setTemplates] = useState<PromptTemplate[]>([]);
+  const [templateId, setTemplateId] = useState("");
+
+  useEffect(() => {
+    fetch("/api/models")
+      .then((r) => r.json())
+      .then((data) => setPresets(Array.isArray(data) ? data : []))
+      .catch(() => setPresets([]));
+    fetch("/api/prompts")
+      .then((r) => r.json())
+      .then((data) => setTemplates(Array.isArray(data?.templates) ? data.templates : []))
+      .catch(() => setTemplates([]));
+  }, []);
+
   if (!node) return null;
   const def = NODE_DEFS[node.data.kind];
+
+  const importTemplate = () => {
+    const tpl = templates.find((t) => t.id === templateId);
+    if (!tpl) return;
+    onChange(node.id, { config: { ...node.data.config, prompt: tpl.content } });
+    setTemplateId("");
+  };
 
   return (
     <div className="flex w-72 shrink-0 flex-col border-l border-neutral-200 bg-white">
@@ -49,18 +85,73 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
             <span className="mb-1 block text-xs font-medium text-neutral-500">
               {field.label}
             </span>
-            {field.multiline ? (
-              <textarea
-                rows={4}
-                value={node.data.config[field.key] ?? ""}
-                placeholder={field.placeholder}
-                onChange={(e) =>
-                  onChange(node.id, {
-                    config: { ...node.data.config, [field.key]: e.target.value },
-                  })
-                }
-                className="w-full resize-y rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
-              />
+            {field.type === "model" ? (
+              <>
+                <select
+                  value={node.data.config[field.key] ?? ""}
+                  onChange={(e) =>
+                    onChange(node.id, {
+                      config: { ...node.data.config, [field.key]: e.target.value },
+                    })
+                  }
+                  className="w-full rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                >
+                  <option value="">未选择</option>
+                  {presets.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}（{p.model}）
+                    </option>
+                  ))}
+                </select>
+                {presets.length === 0 && (
+                  <span className="mt-1 block text-xs text-neutral-400">
+                    暂无预设，请先到「模型」页添加。
+                  </span>
+                )}
+              </>
+            ) : field.multiline ? (
+              <>
+                {field.key === "prompt" && (
+                  <div className="mb-1.5 flex gap-1.5">
+                    <select
+                      value={templateId}
+                      onChange={(e) => setTemplateId(e.target.value)}
+                      className="min-w-0 flex-1 rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs outline-none focus:border-blue-400"
+                    >
+                      <option value="">选择提示词模板…</option>
+                      {[...new Set(templates.map((t) => t.group))].map((g) => (
+                        <optgroup key={g} label={g}>
+                          {templates
+                            .filter((t) => t.group === g)
+                            .map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <button
+                      onClick={importTemplate}
+                      disabled={!templateId}
+                      className="shrink-0 rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 disabled:opacity-40"
+                    >
+                      导入
+                    </button>
+                  </div>
+                )}
+                <textarea
+                  rows={4}
+                  value={node.data.config[field.key] ?? ""}
+                  placeholder={field.placeholder}
+                  onChange={(e) =>
+                    onChange(node.id, {
+                      config: { ...node.data.config, [field.key]: e.target.value },
+                    })
+                  }
+                  className="w-full resize-y rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                />
+              </>
             ) : (
               <input
                 value={node.data.config[field.key] ?? ""}

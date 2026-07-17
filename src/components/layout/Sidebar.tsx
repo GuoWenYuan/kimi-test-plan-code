@@ -7,6 +7,8 @@ const NAV_ITEMS = [
   { href: "/", label: "工作台", icon: "🏠" },
   { href: "/workflows", label: "工作流", icon: "🔁" },
   { href: "/knowledge", label: "知识库", icon: "📚" },
+  { href: "/models", label: "模型", icon: "🤖" },
+  { href: "/prompts", label: "提示词", icon: "📝" },
 ];
 
 export default function Sidebar() {

@@ -24,3 +24,14 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* React Flow 连线端口：扩大点击热区（视觉尺寸不变，热区向外扩 8px） */
+.react-flow__handle {
+  position: absolute;
+}
+.react-flow__handle::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 9999px;
+}
