@@ -16,6 +16,7 @@ export default function Sidebar({ role }: SidebarProps) {
     { href: "/knowledge", label: "知识库" },
     { href: "/models", label: "模型" },
     { href: "/prompts", label: "提示词" },
+    { href: "/unity", label: "Unity 控制" },
     { href: "/keys", label: "API Key 管理" },
     // 用户管理仅 super_admin 可见（服务端接口同样做了权限校验）
     ...(role === "super_admin" ? [{ href: "/users", label: "用户管理" }] : []),

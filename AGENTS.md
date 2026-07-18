@@ -34,6 +34,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 知识库 `/knowledge`：Markdown 笔记、标签、图谱、文件上传转换（doc/xmind 等走 tools/ Python 管线）
 - 模型预设 `/models`：name/model/baseUrl/apiKey，支持测试连接
 - 提示词 `/prompts`：分组模板管理
+- Unity 控制 `/unity`：通过本机桥接插件操控用户自己电脑上的 Unity Editor。Unity 侧把 `unity-bridge/Editor/UnityBridge.cs` 放入工程 `Assets/Editor/`，它在 127.0.0.1:39271 起极简 HTTP 服务（CORS 已处理），浏览器直接访问本机桥接口（不过部署服务器），命令经 `EditorApplication.update` 泵到 Unity 主线程执行；`UnityBridge.Register(name, desc, handler)` 可扩展自定义命令
 - 数据隔离语义（沿用旧 workbench 设计）：**模型预设与知识库按 userId 隔离**（表内 user_id 列）；**工作流模板、提示词、自定义节点为登录用户共享**——均属个人数据，全部接口要求登录
 - workbench 页面与后台管理共用 `src/app/(main)/layout.tsx` 布局与侧边栏；侧边栏按角色过滤"用户管理"
 
@@ -54,6 +55,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `src/lib/models-store.ts` / `knowledge.ts` / `kb-import.ts` — 按 userId 隔离的存储与知识库导入
 - `src/lib/llm.ts` / `workflow-engine.ts` — LangChain 模型封装与工作流执行引擎
 - `src/app/api/{workflows,knowledge,models,prompts,custom-nodes}/*` — workbench 接口，均需登录
+- `src/app/api/unity-bridge/*` — Unity Bridge 插件源码下载（需登录）
 
 ## Next 16 关键差异（踩过的坑）
 
@@ -76,3 +78,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 2026-07-18：从 583dd9b 恢复 workbench（工作流/知识库/模型预设/提示词/自定义节点），与后台管理共存于 `(main)` 布局；恢复的 API 全部迁移到新 session 认证（`getSessionUser()`，未登录 401），保留原有 userId 隔离语义；旧 wb_session 签名 cookie、scrypt 哈希、注册接口未恢复；build / lint / curl 抽查（隔离、脱敏、后台回归）通过
 - 2026-07-18：全部 JSON 存储迁移到 SQLite（新增 `src/lib/db.ts`，node:sqlite + `DATABASE_PATH` 环境变量）；知识库笔记从 .md 文件改为表存储（foam 索引改由数据库回调喂数据）；实现旧 JSON 自动一次性迁移（导入后旧文件改名 .migrated.bak）；@types/node 升到 ^24 以获得 node:sqlite 类型；真实数据迁移、重启持久化、全新空库环境均经 curl 验证通过
 - 2026-07-18：新增公开注册功能（`/register` 页 + `POST /api/auth/register`），角色固定为普通用户 `user`，注册成功自动登录；proxy 放行 `/register`，登录页加入口链接；build / lint / curl 验证（注册、重复用户名 409、自动登录、普通用户访问用户管理 403）通过
+- 2026-07-18：新增 Unity 控制功能：Unity Editor 本地桥接插件 `unity-bridge/Editor/UnityBridge.cs`（TcpListener 极简 HTTP，127.0.0.1:39271，CORS + Private Network Access 头，命令注册表 + 主线程泵，内置 log/create_cube/list_root_objects/select_object 示例）+ 网页端 `/unity` 页面（连接本机桥、命令发现与执行、执行日志）；网页只与浏览器所在机器的 127.0.0.1 通信，无新增服务端接口；lint / build / curl 冒烟（未登录 307、登录后 200）通过，Unity 侧插件需在实际 Unity 工程中验证
