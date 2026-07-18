@@ -12,9 +12,13 @@ export default function Sidebar({ role }: SidebarProps) {
 
   const menus = [
     { href: "/", label: "仪表盘" },
+    { href: "/workflows", label: "工作流" },
+    { href: "/knowledge", label: "知识库" },
+    { href: "/models", label: "模型" },
+    { href: "/prompts", label: "提示词" },
+    { href: "/keys", label: "API Key 管理" },
     // 用户管理仅 super_admin 可见（服务端接口同样做了权限校验）
     ...(role === "super_admin" ? [{ href: "/users", label: "用户管理" }] : []),
-    { href: "/keys", label: "API Key 管理" },
   ];
 
   return (
@@ -22,7 +26,8 @@ export default function Sidebar({ role }: SidebarProps) {
       <div className="px-5 py-5 text-lg font-bold text-white">后台管理系统</div>
       <nav className="flex-1 space-y-1 px-3">
         {menus.map((item) => {
-          const active = pathname === item.href;
+          const active =
+            item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}

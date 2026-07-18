@@ -1,0 +1,274 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CREATABLE_NODES, type NodeKind } from "./nodeDefs";
+import type { CustomNodeDef } from "@/lib/custom-nodes-store";
+
+interface ModelPreset {
+  id: string;
+  name: string;
+  model: string;
+}
+
+interface Props {
+  onAdd: (kind: NodeKind) => void;
+  onAddCustom: (def: CustomNodeDef) => void;
+}
+
+export default function NodePalette({ onAdd, onAddCustom }: Props) {
+  const [customNodes, setCustomNodes] = useState<CustomNodeDef[]>([]);
+  const [presets, setPresets] = useState<ModelPreset[]>([]);
+  const [genOpen, setGenOpen] = useState(false);
+  const [requirement, setRequirement] = useState("");
+  const [presetId, setPresetId] = useState("");
+  const [tag, setTag] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /** 上传本地 skill 文件（.md/.txt），作为 llm 类自定义节点 */
+  const uploadSkill = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setGenError("");
+    try {
+      const content = await file.text();
+      const name = file.name.replace(/\.(md|txt)$/i, "");
+      const res = await fetch("/api/custom-nodes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          description: `Skill：${name}`,
+          tag: tag.trim() || "Skill",
+          mode: "llm",
+          content: `请严格遵循以下 Skill 指引处理输入：\n\n${content}`,
+        }),
+      });
+      if (!res.ok) {
+        setGenError((await res.json()).error ?? "上传失败");
+        return;
+      }
+      setGenOpen(false);
+      refresh();
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const refresh = () => {
+    fetch("/api/custom-nodes")
+      .then((r) => r.json())
+      .then((data) => setCustomNodes(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    refresh();
+    fetch("/api/models")
+      .then((r) => r.json())
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        setPresets(list);
+        if (list.length > 0) setPresetId(list[0].id);
+      })
+      .catch(() => {});
+  }, []);
+
+  const groups = useMemo(() => {
+    const map = new Map<string, CustomNodeDef[]>();
+    for (const n of customNodes) {
+      map.set(n.tag, [...(map.get(n.tag) ?? []), n]);
+    }
+    return [...map.entries()].sort(([a], [b]) =>
+      a === "默认" ? 1 : b === "默认" ? -1 : a.localeCompare(b, "zh")
+    );
+  }, [customNodes]);
+
+  const generate = async () => {
+    if (!requirement.trim()) {
+      setGenError("请描述节点要做什么");
+      return;
+    }
+    setGenerating(true);
+    setGenError("");
+    try {
+      const res = await fetch("/api/custom-nodes/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requirement: requirement.trim(), presetId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setGenError(data.error ?? "生成失败");
+        return;
+      }
+      const save = await fetch("/api/custom-nodes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data.spec, tag: tag.trim() || "默认" }),
+      });
+      if (!save.ok) {
+        setGenError((await save.json()).error ?? "保存失败");
+        return;
+      }
+      setRequirement("");
+      setGenOpen(false);
+      refresh();
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const removeCustom = async (id: string) => {
+    if (!confirm("删除该自定义节点？画布中已使用的实例会在运行时报错。")) return;
+    await fetch(`/api/custom-nodes/${id}`, { method: "DELETE" });
+    refresh();
+  };
+
+  return (
+    <div className="flex w-56 shrink-0 flex-col border-r border-neutral-200 bg-white">
+      <div className="border-b border-neutral-100 px-4 py-3 text-xs font-medium text-neutral-500">
+        添加节点（点击或拖入画布）
+      </div>
+      <div className="flex-1 space-y-1 overflow-y-auto p-2">
+        {CREATABLE_NODES.map((def) => (
+          <button
+            key={def.kind}
+            onClick={() => onAdd(def.kind)}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData("application/workbench-node", def.kind);
+              e.dataTransfer.effectAllowed = "move";
+            }}
+            className="flex w-full cursor-grab items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-neutral-100 active:cursor-grabbing"
+          >
+            <span
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded text-sm text-white ${def.color}`}
+            >
+              {def.icon}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-neutral-800">{def.title}</span>
+              <span className="block truncate text-xs text-neutral-400">{def.description}</span>
+            </span>
+          </button>
+        ))}
+
+        {/* 自定义节点：按标签分组 */}
+        {groups.length > 0 && (
+          <div className="px-3 pb-1 pt-3 text-xs font-medium text-neutral-400">自定义节点</div>
+        )}
+        {groups.map(([g, items]) => (
+          <div key={g}>
+            <div className="px-3 py-1 text-xs text-neutral-400">#{g}</div>
+            {items.map((def) => (
+              <div key={def.id} className="group relative">
+                <button
+                  onClick={() => onAddCustom(def)}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("application/workbench-node", `custom:${def.id}`);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  className="flex w-full cursor-grab items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-fuchsia-50 active:cursor-grabbing"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-sm text-white bg-fuchsia-500">
+                    {def.mode === "llm" ? "✨" : "🧮"}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-neutral-800">{def.name}</span>
+                    <span className="block truncate text-xs text-neutral-400">{def.description}</span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => removeCustom(def.id)}
+                  className="absolute right-2 top-2 hidden text-xs text-neutral-400 hover:text-rose-600 group-hover:block"
+                  title="删除自定义节点"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* AI 生成节点 */}
+      <div className="border-t border-neutral-100 p-2">
+        {!genOpen ? (
+          <button
+            onClick={() => setGenOpen(true)}
+            className="w-full rounded-md border border-dashed border-fuchsia-300 px-3 py-2 text-xs text-fuchsia-600 hover:bg-fuchsia-50"
+          >
+            ✨ AI 生成节点
+          </button>
+        ) : (
+          <div className="space-y-2 rounded-md border border-fuchsia-200 bg-fuchsia-50/50 p-2">
+            <select
+              value={presetId}
+              onChange={(e) => setPresetId(e.target.value)}
+              className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs outline-none"
+            >
+              {presets.length === 0 && <option value="">先到「模型」页添加预设</option>}
+              {presets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}（{p.model}）
+                </option>
+              ))}
+            </select>
+            <textarea
+              rows={3}
+              value={requirement}
+              onChange={(e) => setRequirement(e.target.value)}
+              placeholder="描述节点要做什么，如：把输入文本翻译成英文"
+              className="w-full resize-y rounded-md border border-neutral-200 px-2 py-1 text-xs outline-none"
+            />
+            <input
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              placeholder="标签（可选，如：文本处理）"
+              className="w-full rounded-md border border-neutral-200 px-2 py-1 text-xs outline-none"
+            />
+            {genError && <p className="text-xs text-rose-600">{genError}</p>}
+            <div className="flex gap-1">
+              <button
+                onClick={generate}
+                disabled={generating || !presetId}
+                className="flex-1 rounded-md bg-fuchsia-600 px-2 py-1 text-xs text-white hover:bg-fuchsia-500 disabled:opacity-50"
+              >
+                {generating ? "生成中…" : "生成"}
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex-1 rounded-md border border-fuchsia-300 px-2 py-1 text-xs text-fuchsia-600 hover:bg-fuchsia-50 disabled:opacity-50"
+                title="上传本地 skill 文件（.md/.txt）作为节点"
+              >
+                {uploading ? "上传中…" : "上传 Skill"}
+              </button>
+              <button
+                onClick={() => setGenOpen(false)}
+                className="rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100"
+              >
+                取消
+              </button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".md,.txt"
+              className="hidden"
+              onChange={uploadSkill}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

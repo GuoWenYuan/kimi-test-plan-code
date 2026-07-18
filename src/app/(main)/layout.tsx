@@ -10,11 +10,12 @@ export default async function MainLayout({
   const user = await requireUserOrRedirect();
 
   return (
-    <div className="flex min-h-screen">
+    // h-screen + min-h-0：工作流编辑器等页面需要充满剩余高度且不出现整页滚动
+    <div className="flex h-screen overflow-hidden">
       <Sidebar role={user.role} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar username={user.username} role={user.role} />
-        <main className="flex-1 p-6">{children}</main>
+        <main className="min-h-0 flex-1 overflow-auto">{children}</main>
       </div>
     </div>
   );

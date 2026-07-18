@@ -119,7 +119,7 @@ export default function KeysManager({ isSuperAdmin }: { isSuperAdmin: boolean })
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <h1 className="text-2xl font-bold text-gray-900">API Key 管理</h1>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
