@@ -13,7 +13,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Next.js 16（App Router，Turbopack）+ React 19 + TypeScript + Tailwind CSS 4
 - `npm install` → `npm run dev`（开发）或 `npm run build && npm run start`（生产，端口 3000）
 - `next build` 不再内嵌 lint，需单独运行 `npm run lint`
-- 存储：项目内 `data/` 目录的 JSON 文件（已被 .gitignore 忽略），无外部数据库
+- 存储：**SQLite 单文件数据库**（Node 内置 `node:sqlite`，零原生依赖）。数据库路径由环境变量 `DATABASE_PATH` 指定，默认项目内 `data/app.db`（data/ 已被 .gitignore 忽略）。重新部署保留数据：把 `DATABASE_PATH` 指向项目外固定目录，或随部署携带 app.db 文件
+- 旧 JSON 数据的一次性迁移在 `src/lib/db.ts`：首次连接时若 data/ 下存在旧 JSON 且对应表为空则自动导入，导入后旧文件改名为 `*.migrated.bak` 保留
 
 ## 功能与结构
 
@@ -32,12 +33,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 知识库 `/knowledge`：Markdown 笔记、标签、图谱、文件上传转换（doc/xmind 等走 tools/ Python 管线）
 - 模型预设 `/models`：name/model/baseUrl/apiKey，支持测试连接
 - 提示词 `/prompts`：分组模板管理
-- 数据隔离语义（沿用旧 workbench 设计）：**模型预设与知识库按 userId 隔离**（存 `data/users/<userId>/`）；**工作流模板、提示词、自定义节点为登录用户共享**（存 `data/*.json`）——均属个人数据，全部接口要求登录
+- 数据隔离语义（沿用旧 workbench 设计）：**模型预设与知识库按 userId 隔离**（表内 user_id 列）；**工作流模板、提示词、自定义节点为登录用户共享**——均属个人数据，全部接口要求登录
 - workbench 页面与后台管理共用 `src/app/(main)/layout.tsx` 布局与侧边栏；侧边栏按角色过滤"用户管理"
 
 ## 关键文件
 
-- `src/lib/store.ts` — JSON 持久化层（users / api-keys / sessions），含种子逻辑
+- `src/lib/db.ts` — 统一 SQLite 存储层：连接单例、幂等 DDL、旧 JSON 一次性迁移
+- `src/lib/store.ts` — users / api_keys / sessions 存储（含种子逻辑）
 - `src/lib/auth.ts` — 会话校验助手
 - `src/proxy.ts` — 路由拦截（见下方 Next 16 差异）
 - `src/app/api/auth/*` — 登录 / 退出 / 当前用户
@@ -58,6 +60,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Async Request APIs：`cookies()` 必须 `await`（写 cookie 也是）；动态路由 `params` 是 Promise，类型为 `{ params: Promise<{ id: string }> }`
 - eslint-config-next 16 的 `react-hooks/set-state-in-effect` 会报"effect 中同步 setState"错误：对首次挂载拉取数据的惯用法（effect 里调用 async load），目前用针对性 eslint-disable 注释处理
 - Windows 下 `TaskStop`/结束 npm 进程不会杀掉 `next start` 子进程，测试服务器需按端口 PID 手动 `taskkill`，否则下次启动 EADDRINUSE
+- `node:sqlite` 在 Node 24 免 flag 可用（有 ExperimentalWarning 属正常）；类型需 @types/node ^24
+- `next build` 的页面数据收集阶段会执行 store 模块代码：首次 build 也会触发 db.ts 的旧 JSON 迁移（迁移是幂等的一次性操作，无害，但别在 build 期间期待 data/ 保持原样）
 
 ## 维护约定
 
@@ -69,3 +73,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 - 2026-07-18：初始版本完成。替换原工作流示例应用，实现认证、用户管理、模型 API Key 管理（含管理员脱敏视图）；build / lint / curl 权限测试全部通过
 - 2026-07-18：从 583dd9b 恢复 workbench（工作流/知识库/模型预设/提示词/自定义节点），与后台管理共存于 `(main)` 布局；恢复的 API 全部迁移到新 session 认证（`getSessionUser()`，未登录 401），保留原有 userId 隔离语义；旧 wb_session 签名 cookie、scrypt 哈希、注册接口未恢复；build / lint / curl 抽查（隔离、脱敏、后台回归）通过
+- 2026-07-18：全部 JSON 存储迁移到 SQLite（新增 `src/lib/db.ts`，node:sqlite + `DATABASE_PATH` 环境变量）；知识库笔记从 .md 文件改为表存储（foam 索引改由数据库回调喂数据）；实现旧 JSON 自动一次性迁移（导入后旧文件改名 .migrated.bak）；@types/node 升到 ^24 以获得 node:sqlite 类型；真实数据迁移、重启持久化、全新空库环境均经 curl 验证通过

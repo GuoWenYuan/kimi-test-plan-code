@@ -1,4 +1,3 @@
-import { promises as fs } from "fs";
 import path from "path";
 import {
   bootstrap,
@@ -9,13 +8,16 @@ import {
   createMarkdownParser,
   type Foam,
 } from "foam-core";
+import { getDb } from "@/lib/db";
 
 /**
  * 知识库：基于 foam-core 的 Markdown 图谱知识库。
- * 按用户隔离：data/users/<userId>/knowledge/ 下的纯 .md 文件，
+ * 笔记内容存于 SQLite knowledge_notes 表（按 user_id 隔离），
+ * foam 索引通过 GenericDataStore 回调从数据库读取（kbDir 仅作 URI 虚拟路径，不落地文件），
  * 支持 [[wikilink]] 双链、#标签、反向链接。
  */
 
+/** 仅用于 foam URI 映射的虚拟路径（笔记实际存储在数据库中） */
 function kbDirFor(userId: string): string {
   return path.join(process.cwd(), "data", "users", userId, "knowledge");
 }
@@ -33,22 +35,6 @@ export interface KnowledgeGraph {
   edges: { source: string; target: string }[];
 }
 
-async function listMdFiles(dir: string): Promise<string[]> {
-  const out: string[] = [];
-  let entries;
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
-  for (const e of entries as { name: string; isDirectory(): boolean }[]) {
-    const full = path.join(dir, e.name);
-    if (e.isDirectory()) out.push(...(await listMdFiles(full)));
-    else if (e.name.toLowerCase().endsWith(".md")) out.push(full);
-  }
-  return out;
-}
-
 function toSlug(kbDir: string, fsPath: string): string {
   const rel = path.relative(kbDir, fsPath);
   return rel.replace(/\\/g, "/").replace(/\.md$/i, "");
@@ -59,8 +45,26 @@ function toFsPath(kbDir: string, slug: string): string {
   return path.join(kbDir, `${safe}.md`);
 }
 
+// ---------- 数据库读写 ----------
+
+function listSlugs(userId: string): string[] {
+  const rows = getDb()
+    .prepare("SELECT slug FROM knowledge_notes WHERE user_id = ?")
+    .all(userId) as unknown as { slug: string }[];
+  return rows.map((r) => r.slug);
+}
+
+function readFromDb(userId: string, slug: string): string | null {
+  const row = getDb()
+    .prepare("SELECT content FROM knowledge_notes WHERE user_id = ? AND slug = ?")
+    .get(userId, slug) as unknown as { content: string } | undefined;
+  return row?.content ?? null;
+}
+
+// ---------- foam 索引（内容来自数据库） ----------
+
 const foamCaches = new Map<string, { promise: Promise<Foam>; at: number }>();
-const CACHE_TTL_MS = 5000; // 外部直接改 md 文件（VS Code/Obsidian）后最多 5s 生效
+const CACHE_TTL_MS = 5000; // 写操作会主动失效缓存；TTL 仅为兜底
 
 async function getFoam(userId: string): Promise<Foam> {
   const cached = foamCaches.get(userId);
@@ -70,11 +74,9 @@ async function getFoam(userId: string): Promise<Foam> {
   const kbDir = kbDirFor(userId);
   const stale = cached?.promise;
   const promise = (async () => {
-    await fs.mkdir(kbDir, { recursive: true });
-    const files = (await listMdFiles(kbDir)).map((f) => URI.file(f));
     const store = new GenericDataStore(
-      async () => files,
-      async (uri) => fs.readFile(uri.toFsPath(), "utf-8")
+      async () => listSlugs(userId).map((slug) => URI.file(toFsPath(kbDir, slug))),
+      async (uri) => readFromDb(userId, toSlug(kbDir, uri.toFsPath())) ?? ""
     );
     const parser = createMarkdownParser();
     const foam = await bootstrap(
@@ -157,40 +159,32 @@ export async function getBacklinks(userId: string, slug: string): Promise<string
 }
 
 export async function readNote(userId: string, slug: string): Promise<string | null> {
-  try {
-    return await fs.readFile(toFsPath(kbDirFor(userId), slug), "utf-8");
-  } catch {
-    return null;
-  }
+  return readFromDb(userId, slug);
 }
 
 export async function createNote(userId: string, slug: string, content: string): Promise<void> {
-  const fp = toFsPath(kbDirFor(userId), slug);
-  await fs.mkdir(path.dirname(fp), { recursive: true });
-  await fs.writeFile(fp, content, "utf-8");
+  getDb()
+    .prepare("INSERT OR REPLACE INTO knowledge_notes (user_id, slug, content) VALUES (?, ?, ?)")
+    .run(userId, slug, content);
   await invalidate(userId);
 }
 
 export async function updateNote(userId: string, slug: string, content: string): Promise<boolean> {
-  const fp = toFsPath(kbDirFor(userId), slug);
-  try {
-    await fs.access(fp);
-  } catch {
-    return false;
-  }
-  await fs.writeFile(fp, content, "utf-8");
+  const result = getDb()
+    .prepare("UPDATE knowledge_notes SET content = ? WHERE user_id = ? AND slug = ?")
+    .run(content, userId, slug);
+  if (result.changes === 0) return false;
   await invalidate(userId);
   return true;
 }
 
 export async function deleteNote(userId: string, slug: string): Promise<boolean> {
-  try {
-    await fs.unlink(toFsPath(kbDirFor(userId), slug));
-    await invalidate(userId);
-    return true;
-  } catch {
-    return false;
-  }
+  const result = getDb()
+    .prepare("DELETE FROM knowledge_notes WHERE user_id = ? AND slug = ?")
+    .run(userId, slug);
+  if (result.changes === 0) return false;
+  await invalidate(userId);
+  return true;
 }
 
 export interface KnowledgeSearchHit {
@@ -202,40 +196,41 @@ export interface KnowledgeSearchHit {
 
 /** 从所有笔记中移除指定标签（#tag 出现处），返回修改的笔记数 */
 export async function removeTagFromAllNotes(userId: string, tag: string): Promise<number> {
-  const files = await listMdFiles(kbDirFor(userId));
+  const db = getDb();
+  const rows = db
+    .prepare("SELECT slug, content FROM knowledge_notes WHERE user_id = ?")
+    .all(userId) as unknown as { slug: string; content: string }[];
   const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp(`#${escaped}(?![\\w\\u4e00-\\u9fa5-])`, "g");
+  const update = db.prepare("UPDATE knowledge_notes SET content = ? WHERE user_id = ? AND slug = ?");
   let changed = 0;
-  for (const f of files) {
-    const content = await fs.readFile(f, "utf-8");
-    if (!re.test(content)) continue;
-    const next = content
+  for (const row of rows) {
+    if (!re.test(row.content)) continue;
+    re.lastIndex = 0;
+    const next = row.content
       .replace(re, "")
       .replace(/[ \t]{2,}/g, " ")
       .replace(/^[ \t]+$/gm, "")
       .replace(/\n{3,}/g, "\n\n");
-    await fs.writeFile(f, next, "utf-8");
+    update.run(next, userId, row.slug);
     changed++;
   }
   if (changed > 0) await invalidate(userId);
   return changed;
 }
 
-/** 删除带有指定标签的所有笔记文件，返回删除的笔记数 */
+/** 删除带有指定标签的所有笔记，返回删除的笔记数 */
 export async function deleteNotesByTag(userId: string, tag: string): Promise<number> {
   const foam = await getFoam(userId);
-  const targets = foam.workspace
+  const kbDir = kbDirFor(userId);
+  const slugs = foam.workspace
     .list()
     .filter((r) => r.tags.some((t) => t.label === tag))
-    .map((r) => r.uri.toFsPath());
+    .map((r) => toSlug(kbDir, r.uri.toFsPath()));
+  const stmt = getDb().prepare("DELETE FROM knowledge_notes WHERE user_id = ? AND slug = ?");
   let deleted = 0;
-  for (const f of targets) {
-    try {
-      await fs.unlink(f);
-      deleted++;
-    } catch {
-      // 单个失败不中断
-    }
+  for (const slug of slugs) {
+    deleted += Number(stmt.run(userId, slug).changes);
   }
   if (deleted > 0) await invalidate(userId);
   return deleted;

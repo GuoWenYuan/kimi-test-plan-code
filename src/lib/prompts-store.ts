@@ -1,6 +1,5 @@
-import { promises as fs } from "fs";
-import path from "path";
-import crypto from "crypto";
+import crypto from "node:crypto";
+import { getDb } from "@/lib/db";
 
 export interface PromptTemplate {
   id: string;
@@ -15,9 +14,6 @@ export interface PromptsData {
   groups: string[];
   templates: PromptTemplate[];
 }
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const FILE = path.join(DATA_DIR, "prompts.json");
 
 export const DEFAULT_GROUP = "默认";
 const DEFAULT_GROUPS = [DEFAULT_GROUP, "程序", "写作"];
@@ -57,69 +53,69 @@ const DEFAULT_TEMPLATES: Omit<PromptTemplate, "id" | "createdAt">[] = [
   },
 ];
 
-async function writeAll(data: PromptsData): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(FILE, JSON.stringify(data, null, 2), "utf-8");
+interface TemplateRow {
+  id: string;
+  name: string;
+  description: string;
+  content: string;
+  grp: string;
+  created_at: string;
 }
 
-/** 读取并兼容旧格式（纯数组、无分组字段），返回规范化数据 */
-async function readAll(): Promise<PromptsData> {
-  let raw: string;
-  try {
-    raw = await fs.readFile(FILE, "utf-8");
-  } catch {
-    // 首次使用：写入预置分组和模板
-    const seeded: PromptsData = {
-      groups: [...DEFAULT_GROUPS],
-      templates: DEFAULT_TEMPLATES.map((t) => ({
-        ...t,
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-      })),
-    };
-    await writeAll(seeded);
-    return seeded;
-  }
+function toTemplate(r: TemplateRow): PromptTemplate {
+  return {
+    id: r.id,
+    name: r.name,
+    description: r.description,
+    content: r.content,
+    group: r.grp || DEFAULT_GROUP,
+    createdAt: r.created_at,
+  };
+}
 
-  try {
-    const parsed = JSON.parse(raw);
-    // 旧格式：直接是模板数组
-    if (Array.isArray(parsed)) {
-      const migrated: PromptsData = {
-        groups: [...DEFAULT_GROUPS],
-        templates: parsed.map((t) => ({ ...t, group: t.group ?? DEFAULT_GROUP })),
-      };
-      await writeAll(migrated);
-      return migrated;
-    }
-    const data = parsed as PromptsData;
-    return {
-      groups: Array.isArray(data.groups) && data.groups.length ? data.groups : [...DEFAULT_GROUPS],
-      templates: (data.templates ?? []).map((t) => ({ ...t, group: t.group ?? DEFAULT_GROUP })),
-    };
-  } catch {
-    return { groups: [...DEFAULT_GROUPS], templates: [] };
+/** 首次使用（分组表为空）时写入预置分组和模板；旧数据由 db.ts 的 JSON 迁移导入 */
+function ensureSeeded(): void {
+  const db = getDb();
+  const row = db.prepare("SELECT COUNT(*) AS c FROM prompt_groups").get() as { c: number };
+  if (row.c > 0) return;
+  const gStmt = db.prepare("INSERT OR IGNORE INTO prompt_groups (name) VALUES (?)");
+  for (const g of DEFAULT_GROUPS) gStmt.run(g);
+  const tStmt = db.prepare(
+    "INSERT OR IGNORE INTO prompt_templates (id, name, description, content, grp, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+  );
+  for (const t of DEFAULT_TEMPLATES) {
+    tStmt.run(crypto.randomUUID(), t.name, t.description, t.content, t.group, new Date().toISOString());
   }
 }
 
 export async function getPromptsData(): Promise<PromptsData> {
-  return readAll();
+  ensureSeeded();
+  const db = getDb();
+  const groups = (db.prepare("SELECT name FROM prompt_groups ORDER BY rowid").all() as unknown as { name: string }[]).map(
+    (r) => r.name
+  );
+  const templates = (
+    db.prepare("SELECT * FROM prompt_templates ORDER BY created_at, rowid").all() as unknown as TemplateRow[]
+  ).map(toTemplate);
+  return { groups, templates };
 }
 
 export async function createTemplate(
   input: Omit<PromptTemplate, "id" | "createdAt">
 ): Promise<PromptTemplate> {
-  const data = await readAll();
+  ensureSeeded();
+  const db = getDb();
   const group = input.group || DEFAULT_GROUP;
-  if (!data.groups.includes(group)) data.groups.push(group);
+  db.prepare("INSERT OR IGNORE INTO prompt_groups (name) VALUES (?)").run(group);
   const tpl: PromptTemplate = {
     ...input,
     group,
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
   };
-  data.templates.push(tpl);
-  await writeAll(data);
+  db.prepare(
+    "INSERT INTO prompt_templates (id, name, description, content, grp, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(tpl.id, tpl.name, tpl.description, tpl.content, tpl.group, tpl.createdAt);
   return tpl;
 }
 
@@ -127,42 +123,55 @@ export async function updateTemplate(
   id: string,
   patch: Partial<Omit<PromptTemplate, "id" | "createdAt">>
 ): Promise<PromptTemplate | undefined> {
-  const data = await readAll();
-  const idx = data.templates.findIndex((t) => t.id === id);
-  if (idx === -1) return undefined;
-  data.templates[idx] = { ...data.templates[idx], ...patch };
-  await writeAll(data);
-  return data.templates[idx];
+  const db = getDb();
+  const existing = db.prepare("SELECT * FROM prompt_templates WHERE id = ?").get(id) as unknown as
+    | TemplateRow
+    | undefined;
+  if (!existing) return undefined;
+  const current = toTemplate(existing);
+  const next: PromptTemplate = {
+    ...current,
+    name: patch.name ?? current.name,
+    description: patch.description ?? current.description,
+    content: patch.content ?? current.content,
+    group: patch.group ?? current.group,
+  };
+  if (next.group) {
+    db.prepare("INSERT OR IGNORE INTO prompt_groups (name) VALUES (?)").run(next.group);
+  }
+  db.prepare("UPDATE prompt_templates SET name = ?, description = ?, content = ?, grp = ? WHERE id = ?").run(
+    next.name,
+    next.description,
+    next.content,
+    next.group,
+    id
+  );
+  return next;
 }
 
 export async function deleteTemplate(id: string): Promise<boolean> {
-  const data = await readAll();
-  const next = data.templates.filter((t) => t.id !== id);
-  if (next.length === data.templates.length) return false;
-  data.templates = next;
-  await writeAll(data);
-  return true;
+  const result = getDb().prepare("DELETE FROM prompt_templates WHERE id = ?").run(id);
+  return result.changes > 0;
 }
 
 export async function addGroup(name: string): Promise<{ error?: string }> {
+  ensureSeeded();
   const trimmed = name.trim();
   if (!trimmed) return { error: "分组名不能为空" };
-  const data = await readAll();
-  if (data.groups.includes(trimmed)) return { error: "分组已存在" };
-  data.groups.push(trimmed);
-  await writeAll(data);
+  const db = getDb();
+  const exists = db.prepare("SELECT 1 FROM prompt_groups WHERE name = ?").get(trimmed);
+  if (exists) return { error: "分组已存在" };
+  db.prepare("INSERT INTO prompt_groups (name) VALUES (?)").run(trimmed);
   return {};
 }
 
 /** 删除分组：组内模板移入默认分组；默认分组不可删除 */
 export async function deleteGroup(name: string): Promise<{ error?: string }> {
   if (name === DEFAULT_GROUP) return { error: "默认分组不可删除" };
-  const data = await readAll();
-  if (!data.groups.includes(name)) return { error: "分组不存在" };
-  data.groups = data.groups.filter((g) => g !== name);
-  data.templates = data.templates.map((t) =>
-    t.group === name ? { ...t, group: DEFAULT_GROUP } : t
-  );
-  await writeAll(data);
+  const db = getDb();
+  const exists = db.prepare("SELECT 1 FROM prompt_groups WHERE name = ?").get(name);
+  if (!exists) return { error: "分组不存在" };
+  db.prepare("DELETE FROM prompt_groups WHERE name = ?").run(name);
+  db.prepare("UPDATE prompt_templates SET grp = ? WHERE grp = ?").run(DEFAULT_GROUP, name);
   return {};
 }

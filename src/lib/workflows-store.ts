@@ -1,6 +1,5 @@
-import { promises as fs } from "fs";
-import path from "path";
-import crypto from "crypto";
+import crypto from "node:crypto";
+import { getDb } from "@/lib/db";
 
 export interface WorkflowGraph {
   nodes: unknown[];
@@ -16,27 +15,28 @@ export interface WorkflowTemplate {
   createdAt: string;
 }
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const FILE = path.join(DATA_DIR, "workflows.json");
-
-async function readAll(): Promise<WorkflowTemplate[]> {
-  try {
-    const raw = await fs.readFile(FILE, "utf-8");
-    const list = JSON.parse(raw) as WorkflowTemplate[];
-    // 兼容旧数据：无 tag 字段归入默认
-    return list.map((t) => ({ ...t, tag: t.tag || "默认" }));
-  } catch {
-    return [];
-  }
+interface WorkflowRow {
+  id: string;
+  name: string;
+  tag: string;
+  graph: string;
+  created_at: string;
 }
 
-async function writeAll(list: WorkflowTemplate[]): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(FILE, JSON.stringify(list, null, 2), "utf-8");
+function toWorkflow(r: WorkflowRow): WorkflowTemplate {
+  let graph: WorkflowGraph = { nodes: [], edges: [], knowledge: "" };
+  try {
+    graph = JSON.parse(r.graph) as WorkflowGraph;
+  } catch {
+    // 数据损坏时返回空图，不阻断列表
+  }
+  // 兼容旧数据：无 tag 字段归入默认
+  return { id: r.id, name: r.name, tag: r.tag || "默认", graph, createdAt: r.created_at };
 }
 
 export async function listWorkflows(): Promise<WorkflowTemplate[]> {
-  return readAll();
+  const rows = getDb().prepare("SELECT * FROM workflows ORDER BY created_at, rowid").all() as unknown as WorkflowRow[];
+  return rows.map(toWorkflow);
 }
 
 export async function createWorkflow(
@@ -44,7 +44,6 @@ export async function createWorkflow(
   graph: WorkflowGraph,
   tag = "默认"
 ): Promise<WorkflowTemplate> {
-  const list = await readAll();
   const tpl: WorkflowTemplate = {
     id: crypto.randomUUID(),
     name,
@@ -52,15 +51,13 @@ export async function createWorkflow(
     graph,
     createdAt: new Date().toISOString(),
   };
-  list.push(tpl);
-  await writeAll(list);
+  getDb()
+    .prepare("INSERT INTO workflows (id, name, tag, graph, created_at) VALUES (?, ?, ?, ?, ?)")
+    .run(tpl.id, tpl.name, tpl.tag, JSON.stringify(tpl.graph), tpl.createdAt);
   return tpl;
 }
 
 export async function deleteWorkflow(id: string): Promise<boolean> {
-  const list = await readAll();
-  const next = list.filter((t) => t.id !== id);
-  if (next.length === list.length) return false;
-  await writeAll(next);
-  return true;
+  const result = getDb().prepare("DELETE FROM workflows WHERE id = ?").run(id);
+  return result.changes > 0;
 }

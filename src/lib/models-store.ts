@@ -1,6 +1,5 @@
-import { promises as fs } from "fs";
-import path from "path";
-import crypto from "crypto";
+import crypto from "node:crypto";
+import { getDb } from "@/lib/db";
 
 export interface ModelPreset {
   id: string;
@@ -13,46 +12,56 @@ export interface ModelPreset {
   createdAt: string;
 }
 
-/** 模型预设按用户隔离存储 */
-function fileFor(userId: string): string {
-  return path.join(process.cwd(), "data", "users", userId, "models.json");
+interface PresetRow {
+  id: string;
+  user_id: string;
+  name: string;
+  model: string;
+  base_url: string;
+  api_key: string;
+  created_at: string;
 }
 
-async function readAll(userId: string): Promise<ModelPreset[]> {
-  try {
-    const raw = await fs.readFile(fileFor(userId), "utf-8");
-    return JSON.parse(raw) as ModelPreset[];
-  } catch {
-    return [];
-  }
+function toPreset(r: PresetRow): ModelPreset {
+  return {
+    id: r.id,
+    name: r.name,
+    model: r.model,
+    baseUrl: r.base_url,
+    apiKey: r.api_key,
+    createdAt: r.created_at,
+  };
 }
 
-async function writeAll(userId: string, list: ModelPreset[]): Promise<void> {
-  const file = fileFor(userId);
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file, JSON.stringify(list, null, 2), "utf-8");
-}
-
+/** 模型预设按用户隔离存储（SQLite model_presets 表，user_id 列隔离） */
 export async function listPresets(userId: string): Promise<ModelPreset[]> {
-  return readAll(userId);
+  const rows = getDb()
+    .prepare("SELECT * FROM model_presets WHERE user_id = ? ORDER BY created_at, rowid")
+    .all(userId) as unknown as PresetRow[];
+  return rows.map(toPreset);
 }
 
 export async function getPreset(userId: string, id: string): Promise<ModelPreset | undefined> {
-  return (await readAll(userId)).find((p) => p.id === id);
+  const row = getDb()
+    .prepare("SELECT * FROM model_presets WHERE user_id = ? AND id = ?")
+    .get(userId, id) as unknown as PresetRow | undefined;
+  return row ? toPreset(row) : undefined;
 }
 
 export async function createPreset(
   userId: string,
   input: Omit<ModelPreset, "id" | "createdAt">
 ): Promise<ModelPreset> {
-  const list = await readAll(userId);
   const preset: ModelPreset = {
     ...input,
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
   };
-  list.push(preset);
-  await writeAll(userId, list);
+  getDb()
+    .prepare(
+      "INSERT INTO model_presets (id, user_id, name, model, base_url, api_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    )
+    .run(preset.id, userId, preset.name, preset.model, preset.baseUrl, preset.apiKey, preset.createdAt);
   return preset;
 }
 
@@ -61,18 +70,24 @@ export async function updatePreset(
   id: string,
   patch: Partial<Omit<ModelPreset, "id" | "createdAt">>
 ): Promise<ModelPreset | undefined> {
-  const list = await readAll(userId);
-  const idx = list.findIndex((p) => p.id === id);
-  if (idx === -1) return undefined;
-  list[idx] = { ...list[idx], ...patch };
-  await writeAll(userId, list);
-  return list[idx];
+  const existing = await getPreset(userId, id);
+  if (!existing) return undefined;
+  const next: ModelPreset = {
+    ...existing,
+    name: patch.name ?? existing.name,
+    model: patch.model ?? existing.model,
+    baseUrl: patch.baseUrl ?? existing.baseUrl,
+    apiKey: patch.apiKey ?? existing.apiKey,
+  };
+  getDb()
+    .prepare("UPDATE model_presets SET name = ?, model = ?, base_url = ?, api_key = ? WHERE user_id = ? AND id = ?")
+    .run(next.name, next.model, next.baseUrl, next.apiKey, userId, id);
+  return next;
 }
 
 export async function deletePreset(userId: string, id: string): Promise<boolean> {
-  const list = await readAll(userId);
-  const next = list.filter((p) => p.id !== id);
-  if (next.length === list.length) return false;
-  await writeAll(userId, next);
-  return true;
+  const result = getDb()
+    .prepare("DELETE FROM model_presets WHERE user_id = ? AND id = ?")
+    .run(userId, id);
+  return result.changes > 0;
 }

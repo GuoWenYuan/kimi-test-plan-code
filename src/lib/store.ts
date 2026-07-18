@@ -1,9 +1,8 @@
-import fs from "node:fs";
-import path from "node:path";
 import crypto from "node:crypto";
+import { getDb } from "@/lib/db";
 
 /**
- * 基于项目内 data/ 目录 JSON 文件的极简持久化存储。
+ * 用户 / API Key / Session 存储（SQLite，见 src/lib/db.ts）。
  * 注意：密码按客户要求明文存储（管理员需要可查看密码），
  * 这只是按需求的演示实现，生产环境必须改为哈希存储。
  */
@@ -34,60 +33,71 @@ export interface Session {
   createdAt: number;
 }
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const USERS_FILE = path.join(DATA_DIR, "users.json");
-const KEYS_FILE = path.join(DATA_DIR, "api-keys.json");
-const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
-
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 天
 
-function readJson<T>(file: string, fallback: T): T {
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf-8")) as T;
-  } catch {
-    return fallback;
-  }
+interface UserRow {
+  id: string;
+  username: string;
+  password: string;
+  role: string;
+  created_at: string;
 }
 
-function writeJson(file: string, value: unknown): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(value, null, 2), "utf-8");
+interface KeyRow {
+  id: string;
+  user_id: string;
+  name: string;
+  base_url: string;
+  api_key: string;
+  created_at: string;
+}
+
+interface SessionRow {
+  token: string;
+  user_id: string;
+  created_at: number;
+}
+
+function toUser(r: UserRow): User {
+  return { id: r.id, username: r.username, password: r.password, role: r.role as Role, createdAt: r.created_at };
+}
+
+function toKey(r: KeyRow): ApiKey {
+  return { id: r.id, userId: r.user_id, name: r.name, baseUrl: r.base_url, apiKey: r.api_key, createdAt: r.created_at };
 }
 
 // ---------- 用户 ----------
 
 export function listUsers(): User[] {
-  return readJson<User[]>(USERS_FILE, []);
-}
-
-function saveUsers(users: User[]): void {
-  writeJson(USERS_FILE, users);
+  const rows = getDb().prepare("SELECT * FROM users ORDER BY created_at, rowid").all() as unknown as UserRow[];
+  return rows.map(toUser);
 }
 
 /** 首次启动时种子创建默认超级管理员 */
 export function seedSuperAdmin(): void {
-  const users = listUsers();
-  if (users.some((u) => u.username === "guowenyuan")) return;
-  users.push({
-    id: crypto.randomUUID(),
-    username: "guowenyuan",
-    password: "030501", // 明文：按需求演示实现
-    role: "super_admin",
-    createdAt: new Date().toISOString(),
-  });
-  saveUsers(users);
+  const db = getDb();
+  const exists = db.prepare("SELECT 1 FROM users WHERE username = ?").get("guowenyuan");
+  if (exists) return;
+  db.prepare("INSERT INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)").run(
+    crypto.randomUUID(),
+    "guowenyuan",
+    "030501", // 明文：按需求演示实现
+    "super_admin",
+    new Date().toISOString(),
+  );
 }
 
 export function findUserByUsername(username: string): User | undefined {
-  return listUsers().find((u) => u.username === username);
+  const row = getDb().prepare("SELECT * FROM users WHERE username = ?").get(username) as unknown as UserRow | undefined;
+  return row ? toUser(row) : undefined;
 }
 
 export function findUserById(id: string): User | undefined {
-  return listUsers().find((u) => u.id === id);
+  const row = getDb().prepare("SELECT * FROM users WHERE id = ?").get(id) as unknown as UserRow | undefined;
+  return row ? toUser(row) : undefined;
 }
 
 export function createUser(input: { username: string; password: string; role: Role }): User {
-  const users = listUsers();
   const user: User = {
     id: crypto.randomUUID(),
     username: input.username,
@@ -95,48 +105,49 @@ export function createUser(input: { username: string; password: string; role: Ro
     role: input.role,
     createdAt: new Date().toISOString(),
   };
-  users.push(user);
-  saveUsers(users);
+  getDb()
+    .prepare("INSERT INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)")
+    .run(user.id, user.username, user.password, user.role, user.createdAt);
   return user;
 }
 
 export function updateUser(id: string, patch: { password?: string; role?: Role }): User | undefined {
-  const users = listUsers();
-  const user = users.find((u) => u.id === id);
-  if (!user) return undefined;
-  if (patch.password !== undefined) user.password = patch.password;
-  if (patch.role !== undefined) user.role = patch.role;
-  saveUsers(users);
-  return user;
+  const db = getDb();
+  const existing = findUserById(id);
+  if (!existing) return undefined;
+  const password = patch.password ?? existing.password;
+  const role = patch.role ?? existing.role;
+  db.prepare("UPDATE users SET password = ?, role = ? WHERE id = ?").run(password, role, id);
+  return { ...existing, password, role };
 }
 
-/** 删除用户，同时清理其 API Key 与 session */
+/** 删除用户，同时清理其 API Key、模型预设、知识库笔记与 session */
 export function deleteUser(id: string): boolean {
-  const users = listUsers();
-  const next = users.filter((u) => u.id !== id);
-  if (next.length === users.length) return false;
-  saveUsers(next);
-  writeJson(KEYS_FILE, listKeys().filter((k) => k.userId !== id));
-  writeJson(SESSIONS_FILE, listSessions().filter((s) => s.userId !== id));
+  const db = getDb();
+  const result = db.prepare("DELETE FROM users WHERE id = ?").run(id);
+  if (result.changes === 0) return false;
+  db.prepare("DELETE FROM api_keys WHERE user_id = ?").run(id);
+  db.prepare("DELETE FROM model_presets WHERE user_id = ?").run(id);
+  db.prepare("DELETE FROM knowledge_notes WHERE user_id = ?").run(id);
+  db.prepare("DELETE FROM sessions WHERE user_id = ?").run(id);
   return true;
 }
 
 // ---------- API Key ----------
 
 export function listKeys(): ApiKey[] {
-  return readJson<ApiKey[]>(KEYS_FILE, []);
-}
-
-function saveKeys(keys: ApiKey[]): void {
-  writeJson(KEYS_FILE, keys);
+  const rows = getDb().prepare("SELECT * FROM api_keys ORDER BY created_at, rowid").all() as unknown as KeyRow[];
+  return rows.map(toKey);
 }
 
 export function listKeysByUser(userId: string): ApiKey[] {
-  return listKeys().filter((k) => k.userId === userId);
+  const rows = getDb()
+    .prepare("SELECT * FROM api_keys WHERE user_id = ? ORDER BY created_at, rowid")
+    .all(userId) as unknown as KeyRow[];
+  return rows.map(toKey);
 }
 
 export function createKey(input: { userId: string; name: string; baseUrl: string; apiKey: string }): ApiKey {
-  const keys = listKeys();
   const key: ApiKey = {
     id: crypto.randomUUID(),
     userId: input.userId,
@@ -145,8 +156,9 @@ export function createKey(input: { userId: string; name: string; baseUrl: string
     apiKey: input.apiKey,
     createdAt: new Date().toISOString(),
   };
-  keys.push(key);
-  saveKeys(keys);
+  getDb()
+    .prepare("INSERT INTO api_keys (id, user_id, name, base_url, api_key, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(key.id, key.userId, key.name, key.baseUrl, key.apiKey, key.createdAt);
   return key;
 }
 
@@ -154,45 +166,61 @@ export function updateKey(
   id: string,
   patch: { name?: string; baseUrl?: string; apiKey?: string },
 ): ApiKey | undefined {
-  const keys = listKeys();
-  const key = keys.find((k) => k.id === id);
-  if (!key) return undefined;
-  if (patch.name !== undefined) key.name = patch.name;
-  if (patch.baseUrl !== undefined) key.baseUrl = patch.baseUrl;
-  if (patch.apiKey !== undefined) key.apiKey = patch.apiKey;
-  saveKeys(keys);
-  return key;
+  const db = getDb();
+  const existing = db.prepare("SELECT * FROM api_keys WHERE id = ?").get(id) as unknown as KeyRow | undefined;
+  if (!existing) return undefined;
+  const next: ApiKey = {
+    ...toKey(existing),
+    name: patch.name ?? existing.name,
+    baseUrl: patch.baseUrl ?? existing.base_url,
+    apiKey: patch.apiKey ?? existing.api_key,
+  };
+  db.prepare("UPDATE api_keys SET name = ?, base_url = ?, api_key = ? WHERE id = ?").run(
+    next.name,
+    next.baseUrl,
+    next.apiKey,
+    id,
+  );
+  return next;
 }
 
 export function deleteKey(id: string): ApiKey | undefined {
-  const keys = listKeys();
-  const key = keys.find((k) => k.id === id);
-  if (!key) return undefined;
-  saveKeys(keys.filter((k) => k.id !== id));
-  return key;
+  const db = getDb();
+  const existing = db.prepare("SELECT * FROM api_keys WHERE id = ?").get(id) as unknown as KeyRow | undefined;
+  if (!existing) return undefined;
+  db.prepare("DELETE FROM api_keys WHERE id = ?").run(id);
+  return toKey(existing);
 }
 
 // ---------- Session ----------
 
 export function listSessions(): Session[] {
-  return readJson<Session[]>(SESSIONS_FILE, []);
+  const rows = getDb().prepare("SELECT * FROM sessions").all() as unknown as SessionRow[];
+  return rows.map((r) => ({ token: r.token, userId: r.user_id, createdAt: r.created_at }));
 }
 
 export function createSession(userId: string): Session {
-  const sessions = listSessions().filter((s) => Date.now() - s.createdAt < SESSION_TTL_MS);
+  const db = getDb();
+  // 顺手清理过期 session
+  db.prepare("DELETE FROM sessions WHERE created_at < ?").run(Date.now() - SESSION_TTL_MS);
   const session: Session = { token: crypto.randomUUID(), userId, createdAt: Date.now() };
-  sessions.push(session);
-  writeJson(SESSIONS_FILE, sessions);
+  db.prepare("INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)").run(
+    session.token,
+    session.userId,
+    session.createdAt,
+  );
   return session;
 }
 
 export function findSession(token: string): Session | undefined {
-  const session = listSessions().find((s) => s.token === token);
-  if (!session) return undefined;
-  if (Date.now() - session.createdAt >= SESSION_TTL_MS) return undefined;
-  return session;
+  const row = getDb().prepare("SELECT * FROM sessions WHERE token = ?").get(token) as unknown as
+    | SessionRow
+    | undefined;
+  if (!row) return undefined;
+  if (Date.now() - row.created_at >= SESSION_TTL_MS) return undefined;
+  return { token: row.token, userId: row.user_id, createdAt: row.created_at };
 }
 
 export function deleteSession(token: string): void {
-  writeJson(SESSIONS_FILE, listSessions().filter((s) => s.token !== token));
+  getDb().prepare("DELETE FROM sessions WHERE token = ?").run(token);
 }

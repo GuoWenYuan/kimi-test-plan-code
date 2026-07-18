@@ -46,3 +46,9 @@ next-env.d.ts
 # Python 转换管线虚拟环境
 /tools/.venv/
 __pycache__/
+
+# SQLite 数据库文件（可能在项目外任意 DATABASE_PATH，保险起见全局忽略）
+*.db
+*.db-wal
+*.db-shm
+*.migrated.bak
