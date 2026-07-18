@@ -1,8 +1,13 @@
-import { NextResponse } from "next/server";
-import { sessionCookieName } from "@/lib/auth";
+import { cookies } from "next/headers";
+import { deleteSession } from "@/lib/store";
+import { SESSION_COOKIE } from "@/lib/auth";
 
 export async function POST() {
-  const res = NextResponse.json({ ok: true });
-  res.headers.set("Set-Cookie", `${sessionCookieName()}=; Path=/; HttpOnly; Max-Age=0`);
-  return res;
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  if (token) {
+    deleteSession(token);
+  }
+  cookieStore.delete(SESSION_COOKIE);
+  return Response.json({ ok: true });
 }
