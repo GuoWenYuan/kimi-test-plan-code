@@ -19,6 +19,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## 功能与结构
 
 - 认证：登录页 + HttpOnly session cookie；首次启动自动种子创建超级管理员（凭据不记录于此，由部署者持有）
+- 注册：`/register` 公开注册页 + `POST /api/auth/register`，角色固定为普通用户 `user`，注册成功自动登录（写 session cookie）
 - 角色：`super_admin` / `user`
 - 用户管理（仅 super_admin）：按需求可查看所有用户账号及明文密码、创建/删除用户（不能删自己）、改密码/角色
 - 模型 API Key 管理：
@@ -42,11 +43,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `src/lib/store.ts` — users / api_keys / sessions 存储（含种子逻辑）
 - `src/lib/auth.ts` — 会话校验助手
 - `src/proxy.ts` — 路由拦截（见下方 Next 16 差异）
-- `src/app/api/auth/*` — 登录 / 退出 / 当前用户
+- `src/app/api/auth/*` — 登录 / 退出 / 当前用户 / 注册（register 公开，角色固定 user）
 - `src/app/api/users/*` — 用户管理接口（仅 super_admin）
 - `src/app/api/keys/*` — API Key 接口（`?all=true` 为管理员只读视图，剔除 apiKey）
 - `src/app/(main)/*` — 受保护页面：仪表盘、用户管理、Key 管理、workflows / knowledge / models / prompts
-- `src/app/login/*` — 登录页
+- `src/app/login/*` / `src/app/register/*` — 登录页 / 注册页（proxy 对两者放行，页内做强校验跳转）
 - `src/components/Sidebar.tsx` / `Topbar.tsx` — 后台布局组件（workbench 页面复用，勿恢复旧 `components/layout/`）
 - `src/components/workflow/*` — 工作流编辑器组件
 - `src/lib/workflows-store.ts` / `prompts-store.ts` / `custom-nodes-store.ts` — 共享数据存储
@@ -74,3 +75,4 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 2026-07-18：初始版本完成。替换原工作流示例应用，实现认证、用户管理、模型 API Key 管理（含管理员脱敏视图）；build / lint / curl 权限测试全部通过
 - 2026-07-18：从 583dd9b 恢复 workbench（工作流/知识库/模型预设/提示词/自定义节点），与后台管理共存于 `(main)` 布局；恢复的 API 全部迁移到新 session 认证（`getSessionUser()`，未登录 401），保留原有 userId 隔离语义；旧 wb_session 签名 cookie、scrypt 哈希、注册接口未恢复；build / lint / curl 抽查（隔离、脱敏、后台回归）通过
 - 2026-07-18：全部 JSON 存储迁移到 SQLite（新增 `src/lib/db.ts`，node:sqlite + `DATABASE_PATH` 环境变量）；知识库笔记从 .md 文件改为表存储（foam 索引改由数据库回调喂数据）；实现旧 JSON 自动一次性迁移（导入后旧文件改名 .migrated.bak）；@types/node 升到 ^24 以获得 node:sqlite 类型；真实数据迁移、重启持久化、全新空库环境均经 curl 验证通过
+- 2026-07-18：新增公开注册功能（`/register` 页 + `POST /api/auth/register`），角色固定为普通用户 `user`，注册成功自动登录；proxy 放行 `/register`，登录页加入口链接；build / lint / curl 验证（注册、重复用户名 409、自动登录、普通用户访问用户管理 403）通过

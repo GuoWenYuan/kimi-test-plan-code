@@ -9,8 +9,8 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSessionCookie = request.cookies.has("session");
 
-  if (pathname.startsWith("/login")) {
-    // 已持有 cookie 的用户访问登录页时，交给登录页自身做有效性强校验后跳转
+  if (pathname.startsWith("/login") || pathname.startsWith("/register")) {
+    // 已持有 cookie 的用户访问登录/注册页时，交给页面自身做有效性强校验后跳转
     return NextResponse.next();
   }
 
