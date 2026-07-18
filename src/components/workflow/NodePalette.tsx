@@ -88,6 +88,39 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
     );
   }, [customNodes]);
 
+  // 内置可创建节点：无 group 的为基础节点，有 group 的按标签分组（如"外部工具"）
+  const basicNodes = CREATABLE_NODES.filter((d) => !d.group);
+  const builtinGroups = useMemo(() => {
+    const map = new Map<string, typeof CREATABLE_NODES>();
+    for (const d of CREATABLE_NODES) {
+      if (d.group) map.set(d.group, [...(map.get(d.group) ?? []), d]);
+    }
+    return [...map.entries()];
+  }, []);
+
+  const renderNodeButton = (def: (typeof CREATABLE_NODES)[number]) => (
+    <button
+      key={def.kind}
+      onClick={() => onAdd(def.kind)}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("application/workbench-node", def.kind);
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      className="flex w-full cursor-grab items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-neutral-100 active:cursor-grabbing"
+    >
+      <span
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded text-sm text-white ${def.color}`}
+      >
+        {def.icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-neutral-800">{def.title}</span>
+        <span className="block truncate text-xs text-neutral-400">{def.description}</span>
+      </span>
+    </button>
+  );
+
   const generate = async () => {
     if (!requirement.trim()) {
       setGenError("请描述节点要做什么");
@@ -137,27 +170,14 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
         添加节点（点击或拖入画布）
       </div>
       <div className="flex-1 space-y-1 overflow-y-auto p-2">
-        {CREATABLE_NODES.map((def) => (
-          <button
-            key={def.kind}
-            onClick={() => onAdd(def.kind)}
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData("application/workbench-node", def.kind);
-              e.dataTransfer.effectAllowed = "move";
-            }}
-            className="flex w-full cursor-grab items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-neutral-100 active:cursor-grabbing"
-          >
-            <span
-              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded text-sm text-white ${def.color}`}
-            >
-              {def.icon}
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-medium text-neutral-800">{def.title}</span>
-              <span className="block truncate text-xs text-neutral-400">{def.description}</span>
-            </span>
-          </button>
+        {basicNodes.map(renderNodeButton)}
+
+        {/* 内置分组节点（如"外部工具"） */}
+        {builtinGroups.map(([g, defs]) => (
+          <div key={g}>
+            <div className="px-3 pb-1 pt-3 text-xs font-medium text-neutral-400">#{g}</div>
+            {defs.map(renderNodeButton)}
+          </div>
         ))}
 
         {/* 自定义节点：按标签分组 */}

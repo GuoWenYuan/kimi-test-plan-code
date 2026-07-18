@@ -325,6 +325,8 @@ function EditorCanvas() {
         nodeId?: string;
         label?: string;
         delta?: string;
+        callId?: string;
+        payload?: { url: string; name: string; args: string };
         result?: { status: NodeStatus; output?: string; error?: string };
         results?: Record<string, NodeStatus>;
         finalOutput?: string;
@@ -347,6 +349,37 @@ function EditorCanvas() {
             delete next[id];
             return next;
           });
+        } else if (e.type === "client_call" && e.callId && e.payload) {
+          // 引擎请求浏览器代为调用本机服务（如 Unity Bridge），执行后回传结果
+          const { callId, payload } = e;
+          void (async () => {
+            let ok = true;
+            let result = "";
+            let error = "";
+            try {
+              const r = await fetch(`${payload.url}/execute`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: payload.name, args: payload.args }),
+              });
+              const data = await r.json().catch(() => null);
+              if (r.ok && data?.ok) {
+                result = typeof data.result === "string" ? data.result : JSON.stringify(data.result ?? "");
+              } else {
+                ok = false;
+                error = data?.error ?? `HTTP ${r.status}`;
+              }
+            } catch (err) {
+              ok = false;
+              error = `无法连接 ${payload.url}：请确认本机 Unity Editor 已打开且 Unity Bridge 已启动`;
+              if (err instanceof Error && err.message) error += `（${err.message}）`;
+            }
+            await fetch("/api/workflows/client-result", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ callId, ok, result, error }),
+            }).catch(() => {});
+          })();
         } else if (e.type === "done") {
           setRunFinal(e.finalOutput);
           const hasError = Object.values(e.results ?? {}).some((s) => s === "error");

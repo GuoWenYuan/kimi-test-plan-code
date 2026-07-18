@@ -1,4 +1,5 @@
 import { runWorkflow, type RunEdge, type RunEvent, type RunNode } from "@/lib/workflow-engine";
+import { createClientCall, type ClientCallPayload } from "@/lib/client-calls";
 import { getSessionUser } from "@/lib/auth";
 
 /**
@@ -25,13 +26,21 @@ export async function POST(req: Request) {
   const send = (e: RunEvent | { type: "fatal"; error: string }) =>
     writer.write(encoder.encode(`data: ${JSON.stringify(e)}\n\n`)).catch(() => {});
 
+  // Unity 等"目标在浏览器本机"的节点：下发 client_call 事件，等浏览器回传结果
+  const onClientCall = async (nodeId: string, label: string, payload: ClientCallPayload) => {
+    const { callId, promise } = createClientCall();
+    await send({ type: "client_call", nodeId, label, callId, payload });
+    return promise;
+  };
+
   runWorkflow(
     nodes as RunNode[],
     edges as RunEdge[],
     typeof input === "string" ? input : "",
     typeof body.knowledge === "string" ? body.knowledge : "",
     send,
-    user.id
+    user.id,
+    onClientCall
   )
     .catch((e) => send({ type: "fatal", error: e instanceof Error ? e.message : String(e) }))
     .finally(() => writer.close().catch(() => {}));

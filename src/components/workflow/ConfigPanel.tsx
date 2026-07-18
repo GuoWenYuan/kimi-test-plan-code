@@ -25,6 +25,13 @@ interface CustomNodeDefLite {
   content: string;
 }
 
+interface UnityCommand {
+  name: string;
+  description: string;
+}
+
+const DEFAULT_UNITY_BRIDGE = "http://127.0.0.1:39271";
+
 interface Props {
   node: WorkNode | null;
   onChange: (id: string, patch: { label?: string; config?: Record<string, string> }) => void;
@@ -37,6 +44,9 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [templateId, setTemplateId] = useState("");
   const [customDefs, setCustomDefs] = useState<CustomNodeDefLite[]>([]);
+  const [unityCmds, setUnityCmds] = useState<UnityCommand[]>([]);
+  const [unityLoading, setUnityLoading] = useState(false);
+  const [unityError, setUnityError] = useState("");
 
   useEffect(() => {
     fetch("/api/models")
@@ -65,6 +75,27 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
     if (!tpl) return;
     onChange(node.id, { config: { ...node.data.config, prompt: tpl.content } });
     setTemplateId("");
+  };
+
+  /** 浏览器直连本机 Unity Bridge，拉取可用指令列表 */
+  const loadUnityCommands = async () => {
+    if (!node) return;
+    const base = (node.data.config.bridgeUrl ?? "").trim() || DEFAULT_UNITY_BRIDGE;
+    setUnityLoading(true);
+    setUnityError("");
+    try {
+      const res = await fetch(`${base}/commands`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const list: UnityCommand[] = Array.isArray(data?.commands) ? data.commands : [];
+      setUnityCmds(list);
+      if (list.length === 0) setUnityError("桥端没有可用指令");
+    } catch {
+      setUnityCmds([]);
+      setUnityError("连接失败：请确认本机 Unity Editor 已打开且 Unity Bridge 已启动（可在「Unity 控制」页测试连接）");
+    } finally {
+      setUnityLoading(false);
+    }
   };
 
   return (
@@ -129,6 +160,79 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                 </select>
               </label>
             )}
+          </>
+        )}
+
+        {node.data.kind === "unity" && (
+          <>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-neutral-500">桥接地址</span>
+              <input
+                value={node.data.config.bridgeUrl ?? ""}
+                placeholder={DEFAULT_UNITY_BRIDGE}
+                onChange={(e) =>
+                  onChange(node.id, {
+                    config: { ...node.data.config, bridgeUrl: e.target.value },
+                  })
+                }
+                className="w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+              />
+            </label>
+            <div>
+              <button
+                onClick={loadUnityCommands}
+                disabled={unityLoading}
+                className="w-full rounded-md border border-indigo-200 px-3 py-1.5 text-sm text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
+              >
+                {unityLoading ? "读取中…" : "读取本机 Unity 指令"}
+              </button>
+              {unityError && <p className="mt-1 text-xs text-rose-600">{unityError}</p>}
+            </div>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-neutral-500">Unity 指令</span>
+              <select
+                value={node.data.config.command ?? ""}
+                onChange={(e) =>
+                  onChange(node.id, {
+                    config: { ...node.data.config, command: e.target.value },
+                  })
+                }
+                className="w-full rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+              >
+                <option value="">未选择（先点上方按钮读取）</option>
+                {/* 已保存但当前不在桥端列表中的指令也保留显示，避免配置丢失 */}
+                {node.data.config.command &&
+                  !unityCmds.some((c) => c.name === node.data.config.command) && (
+                    <option value={node.data.config.command}>
+                      {node.data.config.command}（桥端未找到）
+                    </option>
+                  )}
+                {unityCmds.map((c) => (
+                  <option key={c.name} value={c.name} title={c.description}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              {node.data.config.command && (
+                <span className="mt-1 block text-xs text-neutral-400">
+                  {unityCmds.find((c) => c.name === node.data.config.command)?.description ?? ""}
+                </span>
+              )}
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-neutral-500">指令参数</span>
+              <textarea
+                rows={3}
+                value={node.data.config.args ?? ""}
+                placeholder="传给指令的参数字符串，可用 {{input}} / {{节点名}} / {{knowledge}} 引用数据"
+                onChange={(e) =>
+                  onChange(node.id, {
+                    config: { ...node.data.config, args: e.target.value },
+                  })
+                }
+                className="w-full resize-y rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+              />
+            </label>
           </>
         )}
 

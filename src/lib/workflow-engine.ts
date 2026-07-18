@@ -4,7 +4,11 @@ import { createChatModel } from "./llm";
 import { searchKnowledge } from "./knowledge";
 import { importToKnowledge } from "./kb-import";
 import { getCustomNode } from "./custom-nodes-store";
+import type { ClientCallPayload } from "./client-calls";
 import type { NodeKind } from "@/components/workflow/nodeDefs";
+
+/** 需要浏览器代为执行的调用（目标在浏览器本机，如 Unity Bridge），由运行路由实现 */
+export type ClientCallHandler = (nodeId: string, label: string, payload: ClientCallPayload) => Promise<string>;
 
 export interface RunNode {
   id: string;
@@ -36,6 +40,7 @@ export type RunEvent =
   | { type: "node_start"; nodeId: string; label: string }
   | { type: "node_delta"; nodeId: string; delta: string }
   | { type: "node_end"; nodeId: string; label: string; result: NodeResult }
+  | { type: "client_call"; nodeId: string; label: string; callId: string; payload: ClientCallPayload }
   | { type: "done"; results: Record<string, NodeResult>; finalOutput?: string };
 
 /** 节点间流转的数据统一为 JSON 值 */
@@ -194,7 +199,8 @@ export async function runWorkflow(
   userInput: string,
   knowledgeRaw = "",
   emit?: (e: RunEvent) => void,
-  userId = ""
+  userId = "",
+  onClientCall?: ClientCallHandler
 ): Promise<RunResponse> {
   const results: Record<string, NodeResult> = {};
   const outputs = new Map<string, unknown>();
@@ -318,6 +324,23 @@ export async function runWorkflow(
           if (!tag) throw new Error("未填写标签（必填）");
           if (!subTag) throw new Error("未填写子标签（必填）");
           output = await importToKnowledge(userId, targetPath, tag, subTag, config.presetId || undefined);
+          break;
+        }
+        case "unity": {
+          // Unity 工具节点：指令在用户浏览器本机的 Unity Bridge 上，
+          // 由运行路由把调用经 SSE 转交浏览器执行并回传结果
+          const url = (config.bridgeUrl ?? "").trim() || "http://127.0.0.1:39271";
+          const name = (config.command ?? "").trim();
+          if (!name) throw new Error("未选择 Unity 指令，请在节点配置中读取本机指令并选择");
+          const args = renderTemplate(config.args ?? "", input, outputs, labels, knowledge);
+          if (!onClientCall) throw new Error("当前运行方式不支持 Unity 节点");
+          const text = await onClientCall(node.id, node.data.label, { url, name, args });
+          // 桥端返回的是字符串结果；若为 JSON 文本则解析为结构化数据，便于下游取字段
+          try {
+            output = JSON.parse(text) as JsonValue;
+          } catch {
+            output = text;
+          }
           break;
         }
         case "custom": {

@@ -7,7 +7,8 @@ export type NodeKind =
   | "knowledge"
   | "kbimport"
   | "custom"
-  | "condition";
+  | "condition"
+  | "unity";
 
 export interface NodeDef {
   kind: NodeKind;
@@ -18,6 +19,8 @@ export interface NodeDef {
   color: string;
   /** 是否可拖入画布新创建（开始/结束节点默认存在，不出现在添加面板） */
   creatable: boolean;
+  /** 节点面板中的分组标签（如"外部工具"）；不设置则归入顶部基础节点 */
+  group?: string;
   /** 配置面板字段 */
   fields: {
     key: string;
@@ -132,6 +135,17 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     fields: [
       { key: "expression", label: "条件表达式", placeholder: 'input 为 JSON 值，如：input.score > 0.5', multiline: true },
     ],
+  },
+  unity: {
+    kind: "unity",
+    title: "Unity 工具",
+    icon: "🎮",
+    description: "执行本机 Unity Bridge 指令",
+    color: "bg-indigo-500",
+    creatable: true,
+    group: "外部工具",
+    // 配置由 ConfigPanel 特判渲染（指令下拉需浏览器拉取本机 Bridge 的命令列表）
+    fields: [],
   },
 };
 
