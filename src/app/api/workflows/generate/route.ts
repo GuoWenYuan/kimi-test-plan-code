@@ -27,7 +27,9 @@ ${KIND_DESC}
 - 必须恰好包含一个 start 节点和一个 end 节点，start 在左侧 (x≈80)，节点从左到右排布，x 间隔约 240
 - 数据是 JSON 流转；llm 节点的 prompt 里可用 {{input}}、{{节点名}}、{{knowledge}} 引用数据
 - condition 节点有两个分支：出边的 sourceHandle 填 "true" 或 "false"
-- 所有边必须从 start 可达、最终汇聚到 end`;
+- 所有边必须从 start 可达、最终汇聚到 end
+- 除 start 外每个节点的 config 都必须填 inputFormat（本节点接受的数据格式说明或示例，如 {"name":"物体名"} 或 纯文本：物体名）；llm 节点的 prompt 里也要明确约定输出格式（如"以 JSON 输出 {...}"）。若用户需求里已明确格式约定，以用户为准
+- 上下游格式可能不一致时，在两者之间插入 convert 节点（它会读取下游的 inputFormat 自动转换）`;
 
 interface GenNode {
   id: string;

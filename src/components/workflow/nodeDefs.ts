@@ -8,6 +8,7 @@ export type NodeKind =
   | "kbimport"
   | "custom"
   | "condition"
+  | "convert"
   | "unity";
 
 export interface NodeDef {
@@ -134,6 +135,17 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     creatable: true,
     fields: [
       { key: "expression", label: "条件表达式", placeholder: 'input 为 JSON 值，如：input.score > 0.5', multiline: true },
+    ],
+  },
+  convert: {
+    kind: "convert",
+    title: "格式转换",
+    icon: "🔄",
+    description: "把上游输出转换成下游节点声明的「输入格式」",
+    color: "bg-pink-500",
+    creatable: true,
+    fields: [
+      { key: "presetId", label: "模型（可选，不选则仅做 JSON 归一化透传）", type: "model" },
     ],
   },
   unity: {

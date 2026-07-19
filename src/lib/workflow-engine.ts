@@ -165,12 +165,40 @@ async function execLlm(
     text = typeof res.content === "string" ? res.content : JSON.stringify(res.content);
   }
 
-  // 模型若返回 JSON 文本则解析为结构化数据，便于下游取字段
+  return parseJsonText(text);
+}
+
+/**
+ * 把模型输出的文本尽量解析为 JSON：
+ * 先整体解析；失败则提取首个 {...} 或 [...] 块再解析（模型常包 ```json 代码块或说明文字）；
+ * 都失败则返回原文本
+ */
+function parseJsonText(text: string): JsonValue {
   try {
     return JSON.parse(text) as JsonValue;
-  } catch {
-    return text;
+  } catch { /* 继续尝试提取 */ }
+  const m = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+  if (m) {
+    try {
+      return JSON.parse(m[0]) as JsonValue;
+    } catch { /* 落到原文本 */ }
   }
+  return text;
+}
+
+/**
+ * 统一节点输出为 JSON 结构：字符串尽量解析为对象/数组，解析不了的纯文本包装为
+ * { text: "..." }，数字/布尔包装为 { value: ... }，空值归一为 {}。
+ * 下游因此总能按字段取值（如输入取值 text）。
+ */
+function normalizeOutput(v: unknown): JsonValue {
+  if (typeof v === "string") {
+    const parsed = parseJsonText(v);
+    return typeof parsed === "string" ? { text: parsed } : normalizeOutput(parsed);
+  }
+  if (typeof v === "number" || typeof v === "boolean") return { value: v };
+  if (v === null || v === undefined) return {};
+  return v as JsonValue;
 }
 
 function execCode(
@@ -188,7 +216,11 @@ function execCode(
 }
 
 /**
- * 执行工作流：从拓扑序依次执行节点，节点间数据统一为 JSON 值。
+ * 执行工作流：从拓扑序依次执行节点，节点输出统一规范为 JSON 结构
+ * （JSON 文本解析为对象/数组，纯文本包 { text }，数字/布尔包 { value }）。
+ * 节点可配置 inputPath（输入取值），声明只接收上游数据中的某个字段（点路径）；
+ * 节点可配置 inputFormat（输入格式），声明本节点接受的数据格式（说明或示例），
+ * 供上游的 convert（格式转换）节点读取并据此转换数据。
  * knowledgeRaw 为工作流全局知识库（JSON 文本或纯文本），注入到所有节点。
  * 条件节点按表达式结果只激活对应分支（sourceHandle = "true"/"false"），
  * 未被激活分支上的节点标记为 skipped。
@@ -260,6 +292,19 @@ export async function runWorkflow(
     }
 
     try {
+      // 输入取值（可选）：节点声明自己只接收上游数据中的某个字段，
+      // 填了点路径（如 name、items.0、节点名.result）则 input 替换为提取出的值
+      const inputPath = (config.inputPath ?? "").trim();
+      if (inputPath) {
+        const extracted = drill(input, inputPath.split(".").map((s) => s.trim()).filter(Boolean));
+        if (extracted === undefined) {
+          throw new Error(
+            `输入取值「${inputPath}」在上游数据中不存在（上游数据：${inline(input).slice(0, 100) || "空"}）`
+          );
+        }
+        input = extracted;
+      }
+
       let output: unknown;
       switch (kind) {
         case "start": {
@@ -285,6 +330,50 @@ export async function runWorkflow(
         case "code":
           output = execCode(config.code ?? "", input, Object.fromEntries(outputs), knowledge);
           break;
+        case "convert": {
+          // 格式转换：读取下游节点声明的「输入格式」（config.inputFormat），
+          // 选了大模型则把上游输出转换成该格式；不选则仅做 JSON 归一化透传
+          const targetFormat = edges
+            .filter((e) => e.source === node.id)
+            .map((e) => nodes.find((n) => n.id === e.target)?.data.config.inputFormat ?? "")
+            .map((s) => s.trim())
+            .find(Boolean) ?? "";
+          // 上游纯文本已被全局规范包装为 { text }：单字段时先解包回文本，
+          // 便于 kv 归一化与模型转换按原始内容处理
+          let normalized: unknown = typeof input === "string" ? parseJsonText(input) : input;
+          if (
+            normalized && typeof normalized === "object" && !Array.isArray(normalized) &&
+            Object.keys(normalized).length === 1 &&
+            typeof (normalized as Record<string, unknown>).text === "string"
+          ) {
+            normalized = parseJsonText((normalized as Record<string, unknown>).text as string);
+          }
+          if (!config.presetId) {
+            output = normalized;
+          } else {
+            const prompt = [
+              "你是数据格式转换器。把【输入数据】转换为【目标格式】所描述的格式。",
+              "只输出转换结果本身：不要解释、不要 Markdown 代码块、不要多余文字。",
+              "若目标格式带有字段名（如 {\"name\":\"...\"} 或 name:物体名），输出必须是合法 JSON 对象（如 {\"name\":\"值\"}），不要输出 字段:值 这样的纯文本；若目标格式是纯文本，只输出该文本本身。",
+              "",
+              "【目标格式】",
+              targetFormat || "（下游未声明输入格式，请在保持语义不变的前提下整理为结构清晰的 JSON）",
+              "",
+              "【输入数据】",
+              inline(normalized),
+            ].join("\n");
+            output = await execLlm(userId, node, prompt, (delta) =>
+              emit?.({ type: "node_delta", nodeId: node.id, delta })
+            );
+          }
+          // 模型/上游有时把 {"name":"值"} 写成 name:值 纯文本：
+          // 若目标格式声明了该字段名，归一化为 JSON 对象，便于下游按字段取值
+          if (typeof output === "string") {
+            const kv = output.trim().match(/^([^\s:："]{1,32})\s*[:：]\s*([\s\S]+)$/);
+            if (kv && targetFormat.includes(kv[1])) output = { [kv[1]]: kv[2].trim() };
+          }
+          break;
+        }
         case "condition": {
           const expr = config.expression ?? "false";
           const sandbox: Record<string, unknown> = { input, outputs: Object.fromEntries(outputs), knowledge, result: false };
@@ -332,15 +421,25 @@ export async function runWorkflow(
           const url = (config.bridgeUrl ?? "").trim() || "http://127.0.0.1:39271";
           const name = (config.command ?? "").trim();
           if (!name) throw new Error("未选择 Unity 指令，请在节点配置中读取本机指令并选择");
-          const args = renderTemplate(config.args ?? "", input, outputs, labels, knowledge);
+          const argsTpl = (config.args ?? "").trim();
+          let args: string;
+          if (argsTpl) {
+            args = renderTemplate(config.args ?? "", input, outputs, labels, knowledge);
+          } else if (typeof input === "string") {
+            args = input; // 参数留空：上游输出（如格式转换节点的结果）直接作为指令参数
+          } else if (input && typeof input === "object" && typeof (input as Record<string, unknown>).text === "string") {
+            args = (input as Record<string, unknown>).text as string; // 规范输出的 { text } 自动解包
+          } else if (input && typeof input === "object" && Object.keys(input).length > 0) {
+            args = inline(input);
+          } else if (typeof input === "number" || typeof input === "boolean") {
+            args = String(input);
+          } else {
+            args = ""; // 无上游数据（如直接接开始节点）：不传参数
+          }
           if (!onClientCall) throw new Error("当前运行方式不支持 Unity 节点");
           const text = await onClientCall(node.id, node.data.label, { url, name, args });
           // 桥端返回的是字符串结果；若为 JSON 文本则解析为结构化数据，便于下游取字段
-          try {
-            output = JSON.parse(text) as JsonValue;
-          } catch {
-            output = text;
-          }
+          output = parseJsonText(text);
           break;
         }
         case "custom": {
@@ -366,6 +465,9 @@ export async function runWorkflow(
             : input;
           break;
       }
+
+      // 所有节点输出统一规范为 JSON 结构（纯文本包 { text }，数字/布尔包 { value }）
+      output = normalizeOutput(output);
 
       outputs.set(node.id, output);
       results[node.id] = { status: "success", output: serialize(output) };

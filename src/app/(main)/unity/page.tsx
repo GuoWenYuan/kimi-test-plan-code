@@ -51,8 +51,14 @@ export default function UnityPage() {
       const data = await cmdRes.json();
       setCommands(data.commands ?? []);
       appendLog("info", `已连接到 ${bridgeUrl}（项目：${ping.project}，Unity ${ping.unity}）`);
-    } catch {
-      appendLog("error", `连接失败：无法访问 ${bridgeUrl}。请确认本机 Unity Editor 已打开且 Unity Bridge 已启动。`);
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      appendLog(
+        "error",
+        `连接失败：无法访问 ${bridgeUrl}（${detail}）。请确认本机 Unity Editor 已打开且 Unity Bridge 已启动；`
+        + "若 Unity 端已确认运行，请在浏览器地址栏直接打开 "
+        + `${bridgeUrl}/ping 验证，并检查系统代理/VPN 是否拦截了对 127.0.0.1 的请求。`
+      );
     } finally {
       setConnecting(false);
     }

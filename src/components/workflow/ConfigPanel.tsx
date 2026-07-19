@@ -32,6 +32,14 @@ interface UnityCommand {
 
 const DEFAULT_UNITY_BRIDGE = "http://127.0.0.1:39271";
 
+/**
+ * 各桥地址最近一次读取到的指令列表（模块级缓存）。
+ * 配置面板随节点选择卸载/重挂时 state 会清空，有缓存后重新点开节点
+ * 下拉列表立即恢复，不必每次重新点「读取本机 Unity 指令」。
+ * SPA 页面切换不销毁模块，缓存一直有效；整页刷新后需重新读取一次。
+ */
+const unityCmdCache = new Map<string, UnityCommand[]>();
+
 interface Props {
   node: WorkNode | null;
   onChange: (id: string, patch: { label?: string; config?: Record<string, string> }) => void;
@@ -45,6 +53,8 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
   const [templateId, setTemplateId] = useState("");
   const [customDefs, setCustomDefs] = useState<CustomNodeDefLite[]>([]);
   const [unityCmds, setUnityCmds] = useState<UnityCommand[]>([]);
+  /** unityCmds 对应的桥地址；切到别的 unity 节点（桥地址不同）时不误用旧列表 */
+  const [unityCmdsBase, setUnityCmdsBase] = useState("");
   const [unityLoading, setUnityLoading] = useState(false);
   const [unityError, setUnityError] = useState("");
 
@@ -77,6 +87,19 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
     setTemplateId("");
   };
 
+  // unity 节点当前桥地址；state 里的列表只属于最近一次成功读取的桥地址，
+  // 其余情况（面板重开、切到别的 unity 节点）回退到模块级缓存
+  const unityBase =
+    node.data.kind === "unity"
+      ? (node.data.config.bridgeUrl ?? "").trim() || DEFAULT_UNITY_BRIDGE
+      : "";
+  const unityCmdList =
+    node.data.kind === "unity"
+      ? unityCmdsBase === unityBase
+        ? unityCmds
+        : unityCmdCache.get(unityBase) ?? []
+      : [];
+
   /** 浏览器直连本机 Unity Bridge，拉取可用指令列表 */
   const loadUnityCommands = async () => {
     if (!node) return;
@@ -89,9 +112,11 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
       const data = await res.json();
       const list: UnityCommand[] = Array.isArray(data?.commands) ? data.commands : [];
       setUnityCmds(list);
+      setUnityCmdsBase(base);
+      unityCmdCache.set(base, list);
       if (list.length === 0) setUnityError("桥端没有可用指令");
     } catch {
-      setUnityCmds([]);
+      // 失败时保留已有列表（state/缓存），仅提示连接失败
       setUnityError("连接失败：请确认本机 Unity Editor 已打开且 Unity Bridge 已启动（可在「Unity 控制」页测试连接）");
     } finally {
       setUnityLoading(false);
@@ -127,6 +152,50 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
             className="w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
           />
         </label>
+
+        {node.data.kind !== "start" && (
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-neutral-500">
+              输入取值（可选）
+            </span>
+            <input
+              value={node.data.config.inputPath ?? ""}
+              placeholder="留空接收上游全部；填路径如 name、items.0、节点名.result 则只接收该值"
+              onChange={(e) =>
+                onChange(node.id, {
+                  config: { ...node.data.config, inputPath: e.target.value },
+                })
+              }
+              className="w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+            />
+            <span className="mt-1 block text-xs text-neutral-400">
+              声明本节点只接收上游输出中的某个字段，取不到时运行报错。节点输出一律为
+              JSON：纯文本会被包装为 {"{\"text\": \"...\"}"}（填 text 取值），数字/布尔为 {"{\"value\": ...}"}。
+            </span>
+          </label>
+        )}
+
+        {node.data.kind !== "start" && (
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-neutral-500">
+              输入格式（可选）
+            </span>
+            <textarea
+              rows={2}
+              value={node.data.config.inputFormat ?? ""}
+              placeholder='本节点接受的数据格式说明或示例，如 {"name":"物体名"} 或 纯文本：Unity 物体名'
+              onChange={(e) =>
+                onChange(node.id, {
+                  config: { ...node.data.config, inputFormat: e.target.value },
+                })
+              }
+              className="w-full resize-y rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+            />
+            <span className="mt-1 block text-xs text-neutral-400">
+              声明本节点接受什么格式；上游接「格式转换」节点时会读取此声明自动转换。
+            </span>
+          </label>
+        )}
 
         {node.data.kind === "custom" && customDef && (
           <>
@@ -202,12 +271,12 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                 <option value="">未选择（先点上方按钮读取）</option>
                 {/* 已保存但当前不在桥端列表中的指令也保留显示，避免配置丢失 */}
                 {node.data.config.command &&
-                  !unityCmds.some((c) => c.name === node.data.config.command) && (
+                  !unityCmdList.some((c) => c.name === node.data.config.command) && (
                     <option value={node.data.config.command}>
                       {node.data.config.command}（桥端未找到）
                     </option>
                   )}
-                {unityCmds.map((c) => (
+                {unityCmdList.map((c) => (
                   <option key={c.name} value={c.name} title={c.description}>
                     {c.name}
                   </option>
@@ -215,7 +284,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
               </select>
               {node.data.config.command && (
                 <span className="mt-1 block text-xs text-neutral-400">
-                  {unityCmds.find((c) => c.name === node.data.config.command)?.description ?? ""}
+                  {unityCmdList.find((c) => c.name === node.data.config.command)?.description ?? ""}
                 </span>
               )}
             </label>
@@ -224,7 +293,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
               <textarea
                 rows={3}
                 value={node.data.config.args ?? ""}
-                placeholder="传给指令的参数字符串，可用 {{input}} / {{节点名}} / {{knowledge}} 引用数据"
+                placeholder="传给指令的参数字符串，可用 {{input}} / {{节点名}} / {{knowledge}} 引用数据；留空则直接使用上游输出作为参数"
                 onChange={(e) =>
                   onChange(node.id, {
                     config: { ...node.data.config, args: e.target.value },

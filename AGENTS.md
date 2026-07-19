@@ -30,7 +30,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ### workbench（所有登录用户可用）
 
-- 工作流编辑器 `/workflows`：可视化编排、运行（SSE 流式）、AI 生成工作流、自定义节点
+- 工作流编辑器 `/workflows`：可视化编排、运行（SSE 流式）、AI 生成工作流、自定义节点；节点间数据为 JSON 值，下游可用 `{{input.字段}}` / `{{节点名.字段}}` 引用，节点可填「输入取值」只接收上游某个字段、「输入格式」声明本节点接受的格式（供「格式转换」节点读取并自动转换）
 - 知识库 `/knowledge`：Markdown 笔记、标签、图谱、文件上传转换（doc/xmind 等走 tools/ Python 管线）
 - 模型预设 `/models`：name/model/baseUrl/apiKey，支持测试连接
 - 提示词 `/prompts`：分组模板管理
@@ -82,3 +82,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 2026-07-18：新增公开注册功能（`/register` 页 + `POST /api/auth/register`），角色固定为普通用户 `user`，注册成功自动登录；proxy 放行 `/register`，登录页加入口链接；build / lint / curl 验证（注册、重复用户名 409、自动登录、普通用户访问用户管理 403）通过
 - 2026-07-18：新增 Unity 控制功能：Unity Editor 本地桥接插件 `unity-bridge/Editor/UnityBridge.cs`（TcpListener 极简 HTTP，127.0.0.1:39271，CORS + Private Network Access 头，命令注册表 + 主线程泵，内置 log/create_cube/list_root_objects/select_object 示例）+ 网页端 `/unity` 页面（连接本机桥、命令发现与执行、执行日志）；网页只与浏览器所在机器的 127.0.0.1 通信，无新增服务端接口；lint / build / curl 冒烟（未登录 307、登录后 200）通过，Unity 侧插件需在实际 Unity 工程中验证
 - 2026-07-18：工作流新增「Unity 工具」节点（节点面板分组「外部工具」，NodeDef 新增 group 字段）：配置面板可拉取本机 Bridge 指令下拉选择、参数支持模板变量；执行采用浏览器中转（引擎 SSE 下发 client_call → 浏览器调本机 Bridge → `/api/workflows/client-result` 回传，`src/lib/client-calls.ts` 撮合）；lint / build 通过，用假 Bridge + 模拟浏览器脚本验证全链路（模板渲染、回传成功、未选指令报错）
+- 2026-07-18：修复 Unity 工具节点"切走再点回指令列表消失"：根因是指令列表存在 ConfigPanel 组件内 state，面板随节点选择卸载即丢失（已保存的选中指令本身不丢，靠"桥端未找到"兜底 option 显示）；改为模块级 `unityCmdCache` 按桥地址缓存，面板重开时立即恢复列表，state 记录桥地址归属防止多 unity 节点串列表，读取失败不再清空已有列表；jsdom 最小复现验证修复前后行为，lint / build 通过
+- 2026-07-19：工作流节点新增「输入取值」（config.inputPath）：节点可声明只接收上游数据中的某个字段（点路径，如 `name`、`items.0`、`节点名.result`），引擎在汇聚上游输出后按路径提取替换 input，取不到则该节点报错；配置面板对除开始节点外所有节点通用渲染该字段；修复 /unity 页连接失败时吞掉真实错误的问题（日志带原始错误信息）；lint / build / SSE 运行链路 curl 验证（单上游提取、多上游按节点名提取、坏路径报错）通过
+- 2026-07-19：工作流节点新增「输出格式」（config.outputFormat = mixed/single + config.outputKey）：混合为原样输出全部内容（默认），单独则把输出包装为 `{ 变量名: 内容 }` 再传下游，配合「输入取值」或 `{{input.变量名}}` 引用；配置面板对除开始/结束节点外通用渲染；LLM 节点（含自定义 llm 模式）与 Unity 节点的 JSON 解析改为宽容提取（`parseJsonText`：整体解析失败时提取首个 {...}/[...] 块再解析，解决模型包 ```json 代码块导致下游取不到字段的问题）；lint / build / SSE 运行链路 curl 验证（single 包装+下游 inputPath 提取、mixed 原样透传、围栏/说明文字包裹的 JSON 提取）通过
+- 2026-07-19：按用户要求撤掉「输出格式」（outputFormat/outputKey，不限制输出格式），改为「输入格式」声明 + 格式转换节点：每个节点（除 start）可填 config.inputFormat（本节点接受的数据格式说明/示例，纯声明不强制）；新增 convert「格式转换」节点（NodeKind + NODE_DEFS + 引擎 case）——读取下游节点的 inputFormat，选了模型则让大模型把上游输出转成该格式（专用转换提示词，只输出结果本身），不选模型则仅做 JSON 归一化透传（字符串经 parseJsonText 尝试结构化）；AI 生成工作流的系统提示词默认要求各节点填 inputFormat、llm 提示词约定输出格式（用户明确约定则以用户为准），并提示格式不一致时插入 convert 节点；lint / build / SSE 验证（大模型输出的 JSON 文本字符串 → convert 归一化 → 下游 inputPath 取到字段）通过
+- 2026-07-19：Unity 工具节点「指令参数」留空时自动使用上游输出作为参数（字符串直传，非空对象 inline 成 JSON，数字/布尔转字符串，无上游数据则空参数），填了模板则仍按模板渲染——修复"转换节点已输出参数但 Unity 指令拿到空参数报找不到物体"的断点；lint / build / SSE 验证（留空直传 S、接开始节点空参数、{{input.name}} 模板兼容）通过
+- 2026-07-19：格式转换节点兼容模型把 {"name":"值"} 输出成 name:值 纯文本的情况：输出为单行 `字段:值` 且该字段名出现在下游 inputFormat 声明中时，归一化为 JSON 对象（纯文本目标不误转）；转换提示词明确要求带字段名的目标格式必须输出合法 JSON 对象；「输入取值」取不到字段的报错附上游数据预览（前 100 字符）便于排查；lint / build / SSE 验证（name:S → {"name":"S"} → inputPath 取值、"时间: 12:00" 纯文本不误转、坏路径报错带预览）通过
+- 2026-07-19：所有节点输出统一规范为 JSON 结构（`normalizeOutput`，在 outputs.set 前统一应用）：JSON 文本解析为对象/数组，纯文本包装 `{ text }`，数字/布尔包装 `{ value }`，空值归一 `{}`；Unity 节点参数留空时自动解包 `{ text }` 字段；格式转换节点对单字段 `{ text }` 输入先解包再做 kv 归一化/模型转换（否则 kv 规则够不到被包装的文本）；配置面板「输入取值」提示补说明；lint / build / SSE 验证（文本/数字/对象包装、inputPath text、unity 解包 {text}→args "S"、{text:"name:S"}→convert→{"name":"S"}、纯文本透传）通过
