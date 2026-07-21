@@ -16,10 +16,10 @@ export type WorkNodeData = {
 export type WorkNode = Node<WorkNodeData, "work">;
 
 const RUN_STYLE: Record<NonNullable<WorkNodeData["runStatus"]>, string> = {
-  running: "border-blue-400 shadow-md animate-pulse",
+  running: "border-accent shadow-md animate-pulse",
   success: "border-emerald-500 shadow-md",
   error: "border-rose-500 shadow-md",
-  skipped: "border-neutral-200 opacity-50",
+  skipped: "border-line opacity-50",
 };
 
 export default function WorkNodeView({ data, selected }: NodeProps<WorkNode>) {
@@ -28,25 +28,25 @@ export default function WorkNodeView({ data, selected }: NodeProps<WorkNode>) {
 
   return (
     <div
-      className={`w-52 rounded-lg border bg-white shadow-sm transition-shadow ${
+      className={`w-52 rounded-xl border bg-card shadow-sm transition-shadow ${
         data.runStatus
           ? RUN_STYLE[data.runStatus]
           : selected
-            ? "border-blue-500 shadow-md"
-            : "border-neutral-200"
+            ? "border-accent shadow-md"
+            : "border-line"
       }`}
     >
       {data.kind !== "start" && (
         <Handle type="target" position={Position.Left} className="!h-3.5 !w-3.5 !bg-neutral-400" />
       )}
 
-      <div className="flex items-center gap-2 border-b border-neutral-100 px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-2">
         <span
           className={`flex h-6 w-6 items-center justify-center rounded text-xs text-white ${def.color}`}
         >
           {def.icon}
         </span>
-        <span className="truncate text-sm font-medium text-neutral-800">
+        <span className="truncate text-sm font-medium text-fg">
           {data.label}
         </span>
         {data.runStatus && (
@@ -62,7 +62,7 @@ export default function WorkNodeView({ data, selected }: NodeProps<WorkNode>) {
         )}
       </div>
 
-      <div className="px-3 py-2 text-xs text-neutral-400">
+      <div className="px-3 py-2 text-xs text-muted">
         {isCondition ? (
           <div className="space-y-1">
             <div className="flex items-center justify-between">

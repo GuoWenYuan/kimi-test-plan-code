@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "AI 工作台控制台内嵌助手",
+  "version": "1.0.0",
+  "description": "仅对 AI 工作台内嵌的大模型官方控制台页面（DeepSeek / Kimi，sub_frame）移除 iframe 嵌入限制（X-Frame-Options / CSP），并修补 SameSite Cookie 以保留登录态。",
+  "permissions": [
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.deepseek.com/*",
+    "*://*.kimi.com/*",
+    "*://*.kimi.ai/*",
+    "*://*.moonshot.cn/*",
+    "*://*.right.codes/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "内嵌助手：点击切换 ON/OFF"
+  },
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  }
+}

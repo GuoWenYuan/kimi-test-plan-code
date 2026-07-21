@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { getDb } from "@/lib/db";
 
 /**
- * 用户 / API Key / Session 存储（SQLite，见 src/lib/db.ts）。
+ * 用户 / Session 存储（SQLite，见 src/lib/db.ts）。
  * 注意：密码按客户要求明文存储（管理员需要可查看密码），
  * 这只是按需求的演示实现，生产环境必须改为哈希存储。
  */
@@ -15,15 +15,6 @@ export interface User {
   /** 明文密码 —— 按需求演示实现，生产环境请勿明文存储 */
   password: string;
   role: Role;
-  createdAt: string;
-}
-
-export interface ApiKey {
-  id: string;
-  userId: string;
-  name: string;
-  baseUrl: string;
-  apiKey: string;
   createdAt: string;
 }
 
@@ -43,15 +34,6 @@ interface UserRow {
   created_at: string;
 }
 
-interface KeyRow {
-  id: string;
-  user_id: string;
-  name: string;
-  base_url: string;
-  api_key: string;
-  created_at: string;
-}
-
 interface SessionRow {
   token: string;
   user_id: string;
@@ -60,10 +42,6 @@ interface SessionRow {
 
 function toUser(r: UserRow): User {
   return { id: r.id, username: r.username, password: r.password, role: r.role as Role, createdAt: r.created_at };
-}
-
-function toKey(r: KeyRow): ApiKey {
-  return { id: r.id, userId: r.user_id, name: r.name, baseUrl: r.base_url, apiKey: r.api_key, createdAt: r.created_at };
 }
 
 // ---------- 用户 ----------
@@ -121,75 +99,15 @@ export function updateUser(id: string, patch: { password?: string; role?: Role }
   return { ...existing, password, role };
 }
 
-/** 删除用户，同时清理其 API Key、模型预设、知识库笔记与 session */
+/** 删除用户，同时清理其模型预设、知识库笔记与 session */
 export function deleteUser(id: string): boolean {
   const db = getDb();
   const result = db.prepare("DELETE FROM users WHERE id = ?").run(id);
   if (result.changes === 0) return false;
-  db.prepare("DELETE FROM api_keys WHERE user_id = ?").run(id);
   db.prepare("DELETE FROM model_presets WHERE user_id = ?").run(id);
   db.prepare("DELETE FROM knowledge_notes WHERE user_id = ?").run(id);
   db.prepare("DELETE FROM sessions WHERE user_id = ?").run(id);
   return true;
-}
-
-// ---------- API Key ----------
-
-export function listKeys(): ApiKey[] {
-  const rows = getDb().prepare("SELECT * FROM api_keys ORDER BY created_at, rowid").all() as unknown as KeyRow[];
-  return rows.map(toKey);
-}
-
-export function listKeysByUser(userId: string): ApiKey[] {
-  const rows = getDb()
-    .prepare("SELECT * FROM api_keys WHERE user_id = ? ORDER BY created_at, rowid")
-    .all(userId) as unknown as KeyRow[];
-  return rows.map(toKey);
-}
-
-export function createKey(input: { userId: string; name: string; baseUrl: string; apiKey: string }): ApiKey {
-  const key: ApiKey = {
-    id: crypto.randomUUID(),
-    userId: input.userId,
-    name: input.name,
-    baseUrl: input.baseUrl,
-    apiKey: input.apiKey,
-    createdAt: new Date().toISOString(),
-  };
-  getDb()
-    .prepare("INSERT INTO api_keys (id, user_id, name, base_url, api_key, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(key.id, key.userId, key.name, key.baseUrl, key.apiKey, key.createdAt);
-  return key;
-}
-
-export function updateKey(
-  id: string,
-  patch: { name?: string; baseUrl?: string; apiKey?: string },
-): ApiKey | undefined {
-  const db = getDb();
-  const existing = db.prepare("SELECT * FROM api_keys WHERE id = ?").get(id) as unknown as KeyRow | undefined;
-  if (!existing) return undefined;
-  const next: ApiKey = {
-    ...toKey(existing),
-    name: patch.name ?? existing.name,
-    baseUrl: patch.baseUrl ?? existing.base_url,
-    apiKey: patch.apiKey ?? existing.api_key,
-  };
-  db.prepare("UPDATE api_keys SET name = ?, base_url = ?, api_key = ? WHERE id = ?").run(
-    next.name,
-    next.baseUrl,
-    next.apiKey,
-    id,
-  );
-  return next;
-}
-
-export function deleteKey(id: string): ApiKey | undefined {
-  const db = getDb();
-  const existing = db.prepare("SELECT * FROM api_keys WHERE id = ?").get(id) as unknown as KeyRow | undefined;
-  if (!existing) return undefined;
-  db.prepare("DELETE FROM api_keys WHERE id = ?").run(id);
-  return toKey(existing);
 }
 
 // ---------- Session ----------

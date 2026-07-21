@@ -11,7 +11,7 @@ interface UserItem {
 }
 
 const inputCls =
-  "rounded-md border border-gray-300 px-3 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500";
+  "rounded-lg border border-line bg-card px-3 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25";
 
 export default function UsersManager({ currentUserId }: { currentUserId: string }) {
   const [users, setUsers] = useState<UserItem[]>([]);
@@ -96,35 +96,35 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
 
   return (
     <div className="space-y-6 p-6">
-      <h1 className="text-2xl font-bold text-gray-900">用户管理</h1>
+      <h1 className="text-2xl font-bold text-fg">用户管理</h1>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {message && <p className="text-sm text-green-600">{message}</p>}
+      {error && <p className="text-sm text-red-500">{error}</p>}
+      {message && <p className="text-sm text-green-600 dark:text-green-400">{message}</p>}
 
-      <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3 rounded-xl bg-white p-4 shadow-sm">
+      <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3 rounded-xl border border-line bg-card p-4 shadow-sm">
         <div>
-          <label className="mb-1 block text-xs text-gray-500">用户名</label>
+          <label className="mb-1 block text-xs text-muted">用户名</label>
           <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} required className={inputCls} />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-gray-500">密码</label>
+          <label className="mb-1 block text-xs text-muted">密码</label>
           <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required className={inputCls} />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-gray-500">角色</label>
+          <label className="mb-1 block text-xs text-muted">角色</label>
           <select value={newRole} onChange={(e) => setNewRole(e.target.value as "super_admin" | "user")} className={inputCls}>
             <option value="user">普通用户</option>
             <option value="super_admin">超级管理员</option>
           </select>
         </div>
-        <button type="submit" className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+        <button type="submit" className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-hover disabled:opacity-50">
           创建用户
         </button>
       </form>
 
-      <div className="overflow-x-auto rounded-xl bg-white shadow-sm">
+      <div className="overflow-x-auto rounded-xl border border-line bg-card shadow-sm">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-gray-200 text-xs uppercase text-gray-500">
+          <thead className="border-b border-line text-xs uppercase text-muted">
             <tr>
               <th className="px-4 py-3">用户名</th>
               <th className="px-4 py-3">密码（明文）</th>
@@ -135,10 +135,10 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id} className="border-b border-gray-100 last:border-0">
-                <td className="px-4 py-3 font-medium text-gray-900">
+              <tr key={u.id} className="border-b border-line last:border-0">
+                <td className="px-4 py-3 font-medium text-fg">
                   {u.username}
-                  {u.id === currentUserId && <span className="ml-2 text-xs text-gray-400">（当前用户）</span>}
+                  {u.id === currentUserId && <span className="ml-2 text-xs text-muted">（当前用户）</span>}
                 </td>
                 {editingId === u.id ? (
                   <>
@@ -158,28 +158,28 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
                   </>
                 ) : (
                   <>
-                    <td className="px-4 py-3 font-mono text-gray-700">{u.password}</td>
-                    <td className="px-4 py-3 text-gray-700">{u.role === "super_admin" ? "超级管理员" : "普通用户"}</td>
+                    <td className="px-4 py-3 font-mono text-fg">{u.password}</td>
+                    <td className="px-4 py-3 text-fg">{u.role === "super_admin" ? "超级管理员" : "普通用户"}</td>
                   </>
                 )}
-                <td className="px-4 py-3 text-gray-500">{new Date(u.createdAt).toLocaleString("zh-CN")}</td>
+                <td className="px-4 py-3 text-muted">{new Date(u.createdAt).toLocaleString("zh-CN")}</td>
                 <td className="space-x-2 px-4 py-3">
                   {editingId === u.id ? (
                     <>
-                      <button onClick={() => handleSave(u.id)} className="text-sm text-blue-600 hover:underline">
+                      <button onClick={() => handleSave(u.id)} className="text-sm text-accent transition-colors hover:underline">
                         保存
                       </button>
-                      <button onClick={() => setEditingId(null)} className="text-sm text-gray-500 hover:underline">
+                      <button onClick={() => setEditingId(null)} className="text-sm text-muted transition-colors hover:text-fg hover:underline">
                         取消
                       </button>
                     </>
                   ) : (
                     <>
-                      <button onClick={() => startEdit(u)} className="text-sm text-blue-600 hover:underline">
+                      <button onClick={() => startEdit(u)} className="text-sm text-accent transition-colors hover:underline">
                         编辑
                       </button>
                       {u.id !== currentUserId && (
-                        <button onClick={() => handleDelete(u)} className="text-sm text-red-600 hover:underline">
+                        <button onClick={() => handleDelete(u)} className="text-sm text-red-500 transition-colors hover:underline">
                           删除
                         </button>
                       )}
@@ -190,7 +190,7 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
             ))}
             {users.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={5} className="px-4 py-6 text-center text-muted">
                   暂无用户
                 </td>
               </tr>

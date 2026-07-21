@@ -96,24 +96,24 @@ export default function PromptsPage() {
   return (
     <div className="flex h-full">
       {/* 分组侧栏 */}
-      <div className="flex w-44 shrink-0 flex-col border-r border-neutral-200 bg-white">
-        <div className="border-b border-neutral-100 px-4 py-3 text-xs font-medium text-neutral-500">
+      <div className="flex w-44 shrink-0 flex-col border-r border-line bg-card">
+        <div className="border-b border-line px-4 py-3 text-xs font-medium text-muted">
           分组
         </div>
         <div className="flex-1 space-y-1 overflow-y-auto p-2">
           {groups.map((g) => (
             <div
               key={g}
-              className={`group flex cursor-pointer items-center justify-between rounded-md px-3 py-2 text-sm ${
+              className={`group flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
                 activeGroup === g
-                  ? "bg-neutral-900 text-white"
-                  : "text-neutral-600 hover:bg-neutral-100"
+                  ? "bg-accent-soft font-medium text-accent"
+                  : "text-muted hover:bg-subtle hover:text-fg"
               }`}
               onClick={() => setActiveGroup(g)}
             >
               <span className="truncate">{g}</span>
               <span className="ml-1 flex items-center gap-1">
-                <span className={`text-xs ${activeGroup === g ? "text-neutral-300" : "text-neutral-400"}`}>
+                <span className={`text-xs ${activeGroup === g ? "text-accent" : "text-muted"}`}>
                   {templates.filter((t) => t.group === g).length}
                 </span>
                 {g !== "默认" && (
@@ -122,8 +122,8 @@ export default function PromptsPage() {
                       e.stopPropagation();
                       removeGroup(g);
                     }}
-                    className={`hidden text-xs group-hover:block ${
-                      activeGroup === g ? "text-neutral-300 hover:text-white" : "text-neutral-400 hover:text-rose-600"
+                    className={`hidden text-xs transition-colors group-hover:block ${
+                      activeGroup === g ? "text-accent hover:text-accent-hover" : "text-muted hover:text-red-500"
                     }`}
                     title="删除分组"
                   >
@@ -134,18 +134,18 @@ export default function PromptsPage() {
             </div>
           ))}
         </div>
-        <div className="border-t border-neutral-100 p-2">
+        <div className="border-t border-line p-2">
           <div className="flex gap-1">
             <input
               value={newGroup}
               onChange={(e) => setNewGroup(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addNewGroup()}
               placeholder="新分组名"
-              className="min-w-0 flex-1 rounded-md border border-neutral-200 px-2 py-1 text-xs outline-none focus:border-blue-400"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-card px-2 py-1 text-xs text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
             />
             <button
               onClick={addNewGroup}
-              className="shrink-0 rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100"
+              className="shrink-0 rounded-lg border border-line px-2 py-1 text-xs text-muted transition-colors hover:bg-subtle hover:text-fg"
             >
               +
             </button>
@@ -158,8 +158,8 @@ export default function PromptsPage() {
         <div className="mx-auto max-w-3xl">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold">提示词模板 · {activeGroup}</h1>
-              <p className="mt-1 text-sm text-neutral-500">
+              <h1 className="text-xl font-semibold text-fg">提示词模板 · {activeGroup}</h1>
+              <p className="mt-1 text-sm text-muted">
                 在工作流的大模型节点中可一键导入模板后再编辑。
               </p>
             </div>
@@ -170,30 +170,30 @@ export default function PromptsPage() {
                 setShowForm((v) => !v);
                 setError("");
               }}
-              className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm text-white hover:bg-neutral-700"
+              className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-hover disabled:opacity-50"
             >
               {showForm ? "取消" : "+ 新增模板"}
             </button>
           </div>
 
           {showForm && (
-            <div className="mt-4 space-y-3 rounded-lg border border-neutral-200 bg-white p-4">
+            <div className="mt-4 space-y-3 rounded-xl border border-line bg-card p-4 shadow-sm">
               <div className="flex gap-3">
                 <label className="block flex-1">
-                  <span className="mb-1 block text-xs font-medium text-neutral-500">模板名称</span>
+                  <span className="mb-1 block text-xs font-medium text-muted">模板名称</span>
                   <input
                     value={form.name}
                     placeholder="如：会议纪要整理"
                     onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))}
-                    className="w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                    className="w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
                   />
                 </label>
                 <label className="block w-36">
-                  <span className="mb-1 block text-xs font-medium text-neutral-500">所属分组</span>
+                  <span className="mb-1 block text-xs font-medium text-muted">所属分组</span>
                   <select
                     value={form.group}
                     onChange={(e) => setForm((v) => ({ ...v, group: e.target.value }))}
-                    className="w-full rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                    className="w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
                   >
                     {groups.map((g) => (
                       <option key={g} value={g}>
@@ -204,28 +204,28 @@ export default function PromptsPage() {
                 </label>
               </div>
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-neutral-500">描述</span>
+                <span className="mb-1 block text-xs font-medium text-muted">描述</span>
                 <input
                   value={form.description}
                   placeholder="一句话说明用途"
                   onChange={(e) => setForm((v) => ({ ...v, description: e.target.value }))}
-                  className="w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                  className="w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-neutral-500">模板内容</span>
+                <span className="mb-1 block text-xs font-medium text-muted">模板内容</span>
                 <textarea
                   rows={6}
                   value={form.content}
                   placeholder="支持 {{input}} / {{knowledge}} / {{节点名}} 变量"
                   onChange={(e) => setForm((v) => ({ ...v, content: e.target.value }))}
-                  className="w-full resize-y rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                  className="w-full resize-y rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
                 />
               </label>
-              {error && <p className="text-sm text-rose-600">{error}</p>}
+              {error && <p className="text-sm text-red-500">{error}</p>}
               <button
                 onClick={submit}
-                className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm text-white hover:bg-neutral-700"
+                className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-hover disabled:opacity-50"
               >
                 {editingId ? "保存修改" : "创建模板"}
               </button>
@@ -234,38 +234,38 @@ export default function PromptsPage() {
 
           <div className="mt-4 space-y-3">
             {loading ? (
-              <p className="text-sm text-neutral-400">加载中…</p>
+              <p className="text-sm text-muted">加载中…</p>
             ) : visible.length === 0 ? (
-              <div className="flex flex-col items-center rounded-lg border border-dashed border-neutral-300 bg-white py-14">
+              <div className="flex flex-col items-center rounded-xl border border-dashed border-line bg-card py-14 shadow-sm">
                 <div className="text-3xl">📝</div>
-                <p className="mt-3 text-sm font-medium text-neutral-700">
+                <p className="mt-3 text-sm font-medium text-fg">
                   「{activeGroup}」分组还没有模板
                 </p>
-                <p className="mt-1 text-sm text-neutral-400">点击右上角「新增模板」创建。</p>
+                <p className="mt-1 text-sm text-muted">点击右上角「新增模板」创建。</p>
               </div>
             ) : (
               visible.map((t) => (
-                <div key={t.id} className="rounded-lg border border-neutral-200 bg-white p-4">
+                <div key={t.id} className="rounded-xl border border-line bg-card p-4 shadow-sm">
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-neutral-900">{t.name}</div>
+                      <div className="text-sm font-medium text-fg">{t.name}</div>
                       {t.description && (
-                        <p className="mt-0.5 text-xs text-neutral-400">{t.description}</p>
+                        <p className="mt-0.5 text-xs text-muted">{t.description}</p>
                       )}
-                      <pre className="mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded bg-neutral-50 p-2 text-xs text-neutral-600">
+                      <pre className="mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-subtle p-2 text-xs text-muted">
                         {t.content}
                       </pre>
                     </div>
                     <div className="ml-3 flex shrink-0 gap-2 text-sm">
                       <button
                         onClick={() => startEdit(t)}
-                        className="rounded-md border border-neutral-200 px-2.5 py-1 text-neutral-600 hover:bg-neutral-100"
+                        className="rounded-lg border border-line px-2.5 py-1 text-muted transition-colors hover:bg-subtle hover:text-fg"
                       >
                         编辑
                       </button>
                       <button
                         onClick={() => remove(t.id)}
-                        className="rounded-md border border-rose-200 px-2.5 py-1 text-rose-600 hover:bg-rose-50"
+                        className="rounded-lg border border-red-200 px-2.5 py-1 text-red-600 transition-colors hover:bg-red-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10"
                       >
                         删除
                       </button>

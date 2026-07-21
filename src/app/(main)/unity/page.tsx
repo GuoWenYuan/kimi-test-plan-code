@@ -87,14 +87,14 @@ export default function UnityPage() {
 
   return (
     <div className="mx-auto max-w-3xl p-6">
-      <h1 className="text-xl font-semibold">Unity 控制</h1>
-      <p className="mt-1 text-sm text-neutral-500">
+      <h1 className="text-xl font-semibold text-fg">Unity 控制</h1>
+      <p className="mt-1 text-sm text-muted">
         通过本机 Unity Bridge 插件操控你电脑上的 Unity Editor。请先{" "}
-        <a href="/api/unity-bridge" className="text-blue-600 hover:underline">
+        <a href="/api/unity-bridge" className="text-accent hover:underline">
           下载 UnityBridge.cs
         </a>
-        ，放入 Unity 工程的 <code className="rounded bg-neutral-100 px-1">Assets/Editor/</code>{" "}
-        目录（详见 <code className="rounded bg-neutral-100 px-1">unity-bridge/README.md</code>）。
+        ，放入 Unity 工程的 <code className="rounded bg-subtle px-1">Assets/Editor/</code>{" "}
+        目录（详见 <code className="rounded bg-subtle px-1">unity-bridge/README.md</code>）。
       </p>
 
       {/* 连接区 */}
@@ -102,18 +102,18 @@ export default function UnityPage() {
         <input
           value={bridgeUrl}
           onChange={(e) => setBridgeUrl(e.target.value)}
-          className="w-64 rounded-md border border-neutral-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+          className="w-64 rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
           placeholder={DEFAULT_BRIDGE_URL}
         />
         <button
           onClick={connect}
           disabled={connecting}
-          className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm text-white hover:bg-neutral-700 disabled:opacity-50"
+          className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-hover disabled:opacity-50"
         >
           {connecting ? "连接中…" : info ? "重新连接" : "连接本机 Unity"}
         </button>
         {info && (
-          <span className="text-sm text-green-700">
+          <span className="text-sm text-green-600 dark:text-green-400">
             已连接：{info.project}（Unity {info.unity}，{info.commands} 个命令）
           </span>
         )}
@@ -122,25 +122,25 @@ export default function UnityPage() {
       {/* 命令列表 */}
       {commands.length > 0 && (
         <div className="mt-6 space-y-3">
-          <h2 className="text-sm font-medium text-neutral-700">可用命令</h2>
+          <h2 className="text-sm font-medium text-fg">可用命令</h2>
           {commands.map((cmd) => (
-            <div key={cmd.name} className="rounded-lg border border-neutral-200 bg-white p-4">
+            <div key={cmd.name} className="rounded-xl border border-line bg-card p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-neutral-900">{cmd.name}</div>
-                  <p className="mt-0.5 text-xs text-neutral-400">{cmd.description}</p>
+                  <div className="text-sm font-medium text-fg">{cmd.name}</div>
+                  <p className="mt-0.5 text-xs text-muted">{cmd.description}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <input
                     value={argsMap[cmd.name] ?? ""}
                     onChange={(e) => setArgsMap((m) => ({ ...m, [cmd.name]: e.target.value }))}
                     placeholder="参数（可空）"
-                    className="w-44 rounded-md border border-neutral-200 px-2 py-1 text-sm outline-none focus:border-blue-400"
+                    className="w-44 rounded-lg border border-line bg-card px-2 py-1 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
                   />
                   <button
                     onClick={() => execute(cmd.name)}
                     disabled={runningCmd !== null}
-                    className="rounded-md bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                    className="rounded-lg bg-accent px-3 py-1 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-hover disabled:opacity-50"
                   >
                     {runningCmd === cmd.name ? "执行中…" : "执行"}
                   </button>
@@ -155,24 +155,24 @@ export default function UnityPage() {
       {logs.length > 0 && (
         <div className="mt-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-neutral-700">执行日志</h2>
+            <h2 className="text-sm font-medium text-fg">执行日志</h2>
             <button
               onClick={() => setLogs([])}
-              className="text-xs text-neutral-400 hover:text-neutral-600"
+              className="text-xs text-muted transition-colors hover:text-fg"
             >
               清空
             </button>
           </div>
-          <div className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg border border-neutral-200 bg-neutral-50 p-3 font-mono text-xs">
+          <div className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg border border-line bg-subtle p-3 font-mono text-xs">
             {logs.map((log, i) => (
               <div
                 key={i}
                 className={
                   log.kind === "error"
-                    ? "text-rose-600"
+                    ? "text-rose-600 dark:text-rose-400"
                     : log.kind === "ok"
-                      ? "text-green-700"
-                      : "text-neutral-600"
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-muted"
                 }
               >
                 [{log.time}] {log.text}

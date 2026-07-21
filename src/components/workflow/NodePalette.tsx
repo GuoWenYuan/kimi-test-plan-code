@@ -107,7 +107,7 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
         e.dataTransfer.setData("application/workbench-node", def.kind);
         e.dataTransfer.effectAllowed = "move";
       }}
-      className="flex w-full cursor-grab items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-neutral-100 active:cursor-grabbing"
+      className="flex w-full cursor-grab items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-subtle active:cursor-grabbing"
     >
       <span
         className={`flex h-7 w-7 shrink-0 items-center justify-center rounded text-sm text-white ${def.color}`}
@@ -115,8 +115,8 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
         {def.icon}
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-medium text-neutral-800">{def.title}</span>
-        <span className="block truncate text-xs text-neutral-400">{def.description}</span>
+        <span className="block text-sm font-medium text-fg">{def.title}</span>
+        <span className="block truncate text-xs text-muted">{def.description}</span>
       </span>
     </button>
   );
@@ -165,8 +165,8 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
   };
 
   return (
-    <div className="flex w-56 shrink-0 flex-col border-r border-neutral-200 bg-white">
-      <div className="border-b border-neutral-100 px-4 py-3 text-xs font-medium text-neutral-500">
+    <div className="flex w-56 shrink-0 flex-col border-r border-line bg-card">
+      <div className="border-b border-line px-4 py-3 text-xs font-medium text-muted">
         添加节点（点击或拖入画布）
       </div>
       <div className="flex-1 space-y-1 overflow-y-auto p-2">
@@ -175,18 +175,18 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
         {/* 内置分组节点（如"外部工具"） */}
         {builtinGroups.map(([g, defs]) => (
           <div key={g}>
-            <div className="px-3 pb-1 pt-3 text-xs font-medium text-neutral-400">#{g}</div>
+            <div className="px-3 pb-1 pt-3 text-xs font-medium text-muted">#{g}</div>
             {defs.map(renderNodeButton)}
           </div>
         ))}
 
         {/* 自定义节点：按标签分组 */}
         {groups.length > 0 && (
-          <div className="px-3 pb-1 pt-3 text-xs font-medium text-neutral-400">自定义节点</div>
+          <div className="px-3 pb-1 pt-3 text-xs font-medium text-muted">自定义节点</div>
         )}
         {groups.map(([g, items]) => (
           <div key={g}>
-            <div className="px-3 py-1 text-xs text-neutral-400">#{g}</div>
+            <div className="px-3 py-1 text-xs text-muted">#{g}</div>
             {items.map((def) => (
               <div key={def.id} className="group relative">
                 <button
@@ -196,19 +196,19 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
                     e.dataTransfer.setData("application/workbench-node", `custom:${def.id}`);
                     e.dataTransfer.effectAllowed = "move";
                   }}
-                  className="flex w-full cursor-grab items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-fuchsia-50 active:cursor-grabbing"
+                  className="flex w-full cursor-grab items-center gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-accent-soft active:cursor-grabbing"
                 >
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-sm text-white bg-fuchsia-500">
                     {def.mode === "llm" ? "✨" : "🧮"}
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-sm font-medium text-neutral-800">{def.name}</span>
-                    <span className="block truncate text-xs text-neutral-400">{def.description}</span>
+                    <span className="block text-sm font-medium text-fg">{def.name}</span>
+                    <span className="block truncate text-xs text-muted">{def.description}</span>
                   </span>
                 </button>
                 <button
                   onClick={() => removeCustom(def.id)}
-                  className="absolute right-2 top-2 hidden text-xs text-neutral-400 hover:text-rose-600 group-hover:block"
+                  className="absolute right-2 top-2 hidden text-xs text-muted transition-colors hover:text-red-500 group-hover:block"
                   title="删除自定义节点"
                 >
                   ✕
@@ -220,20 +220,20 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
       </div>
 
       {/* AI 生成节点 */}
-      <div className="border-t border-neutral-100 p-2">
+      <div className="border-t border-line p-2">
         {!genOpen ? (
           <button
             onClick={() => setGenOpen(true)}
-            className="w-full rounded-md border border-dashed border-fuchsia-300 px-3 py-2 text-xs text-fuchsia-600 hover:bg-fuchsia-50"
+            className="w-full rounded-md border border-dashed border-accent/50 px-3 py-2 text-xs text-accent transition-colors hover:bg-accent-soft"
           >
             ✨ AI 生成节点
           </button>
         ) : (
-          <div className="space-y-2 rounded-md border border-fuchsia-200 bg-fuchsia-50/50 p-2">
+          <div className="space-y-2 rounded-md border border-accent/25 bg-accent-soft/50 p-2">
             <select
               value={presetId}
               onChange={(e) => setPresetId(e.target.value)}
-              className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs outline-none"
+              className="w-full rounded-md border border-line bg-card px-2 py-1 text-xs text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
             >
               {presets.length === 0 && <option value="">先到「模型」页添加预设</option>}
               {presets.map((p) => (
@@ -247,34 +247,34 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
               value={requirement}
               onChange={(e) => setRequirement(e.target.value)}
               placeholder="描述节点要做什么，如：把输入文本翻译成英文"
-              className="w-full resize-y rounded-md border border-neutral-200 px-2 py-1 text-xs outline-none"
+              className="w-full resize-y rounded-md border border-line bg-card px-2 py-1 text-xs text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
             />
             <input
               value={tag}
               onChange={(e) => setTag(e.target.value)}
               placeholder="标签（可选，如：文本处理）"
-              className="w-full rounded-md border border-neutral-200 px-2 py-1 text-xs outline-none"
+              className="w-full rounded-md border border-line bg-card px-2 py-1 text-xs text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
             />
-            {genError && <p className="text-xs text-rose-600">{genError}</p>}
+            {genError && <p className="text-xs text-red-500">{genError}</p>}
             <div className="flex gap-1">
               <button
                 onClick={generate}
                 disabled={generating || !presetId}
-                className="flex-1 rounded-md bg-fuchsia-600 px-2 py-1 text-xs text-white hover:bg-fuchsia-500 disabled:opacity-50"
+                className="flex-1 rounded-md bg-accent px-2 py-1 text-xs text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
               >
                 {generating ? "生成中…" : "生成"}
               </button>
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
-                className="flex-1 rounded-md border border-fuchsia-300 px-2 py-1 text-xs text-fuchsia-600 hover:bg-fuchsia-50 disabled:opacity-50"
+                className="flex-1 rounded-md border border-accent/50 px-2 py-1 text-xs text-accent transition-colors hover:bg-accent-soft disabled:opacity-50"
                 title="上传本地 skill 文件（.md/.txt）作为节点"
               >
                 {uploading ? "上传中…" : "上传 Skill"}
               </button>
               <button
                 onClick={() => setGenOpen(false)}
-                className="rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100"
+                className="rounded-md border border-line px-2 py-1 text-xs text-muted transition-colors hover:bg-subtle hover:text-fg"
               >
                 取消
               </button>

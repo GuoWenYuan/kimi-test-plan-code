@@ -1,13 +1,74 @@
 @import "tailwindcss";
 
+/* 深色主题以 data-theme 属性驱动（class 策略），dark: 变体可用 */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --canvas: #f4f6f9;
+  --card: #ffffff;
+  --subtle: #f1f3f7;
+  --hover: #e9edf3;
+  --fg: #171c26;
+  --muted: #5d6679;
+  --line: #e3e7ee;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-soft: #eef0fe;
+}
+
+[data-theme="dark"] {
+  --canvas: #0a0c11;
+  --card: #13161d;
+  --subtle: #1a1e27;
+  --hover: #22262f;
+  --fg: #e8eaf0;
+  --muted: #8b93a5;
+  --line: #262b36;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-soft: #1e2140;
+}
+
 @theme inline {
   --font-sans: ui-sans-serif, system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --color-canvas: var(--canvas);
+  --color-card: var(--card);
+  --color-subtle: var(--subtle);
+  --color-hover: var(--hover);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+}
+
+html {
+  color-scheme: light;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 body {
-  background: #f3f4f6;
-  color: #111827;
+  background: var(--canvas);
+  color: var(--fg);
   font-family: ui-sans-serif, system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* 细滚动条，跟随主题 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+/* 主题切换时卡片/边框平滑过渡 */
+.themed,
+.themed * {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 0.25s;
+  transition-timing-function: ease;
 }
 
 /* React Flow 连线端口：扩大点击热区（视觉尺寸不变，热区向外扩 8px） */
@@ -19,4 +80,28 @@ body {
   position: absolute;
   inset: -8px;
   border-radius: 9999px;
+}
+
+/* React Flow 画布在深色主题下的适配 */
+[data-theme="dark"] .react-flow {
+  background: var(--canvas);
+}
+[data-theme="dark"] .react-flow__background {
+  --xy-background-color: var(--canvas);
+}
+[data-theme="dark"] .react-flow__controls button {
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  color: var(--fg);
+  fill: var(--fg);
+}
+[data-theme="dark"] .react-flow__controls button:hover {
+  background: var(--hover);
+}
+[data-theme="dark"] .react-flow__edge-path {
+  stroke: #4b5568;
+}
+[data-theme="dark"] .react-flow__attribution {
+  background: transparent;
+  color: var(--muted);
 }

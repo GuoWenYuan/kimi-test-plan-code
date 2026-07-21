@@ -261,9 +261,9 @@ export default function KnowledgePage() {
         position: { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) },
         data: { label: n.title },
         style: {
-          background: activeSlug === n.slug ? "#171717" : "#fff",
-          color: activeSlug === n.slug ? "#fff" : "#262626",
-          border: "1px solid #d4d4d4",
+          background: activeSlug === n.slug ? "var(--accent)" : "var(--card)",
+          color: activeSlug === n.slug ? "#fff" : "var(--fg)",
+          border: "1px solid var(--line)",
           borderRadius: 8,
           padding: "6px 10px",
           fontSize: 12,
@@ -279,7 +279,7 @@ export default function KnowledgePage() {
         id: `e${i}`,
         source: e.source,
         target: e.target,
-        style: { stroke: "#a3a3a3" },
+        style: { stroke: "var(--muted)" },
       })),
     [graph.edges]
   );
@@ -287,10 +287,10 @@ export default function KnowledgePage() {
   if (needLogin) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
-        <p className="text-sm text-neutral-500">知识库为个人数据，请先登录</p>
+        <p className="text-sm text-muted">知识库为个人数据，请先登录</p>
         <a
           href="/login"
-          className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm text-white hover:bg-neutral-700"
+          className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-hover"
         >
           去登录
         </a>
@@ -301,13 +301,13 @@ export default function KnowledgePage() {
   return (
     <div className="flex h-full">
       {/* 笔记列表 */}
-      <div className="flex w-60 shrink-0 flex-col border-r border-neutral-200 bg-white">
-        <div className="space-y-2 border-b border-neutral-100 p-3">
+      <div className="flex w-60 shrink-0 flex-col border-r border-line bg-card">
+        <div className="space-y-2 border-b border-line p-3">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="搜索笔记…"
-            className="w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+            className="w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
           />
           <div className="flex gap-1">
             <input
@@ -315,18 +315,18 @@ export default function KnowledgePage() {
               onChange={(e) => setNewSlug(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && create()}
               placeholder="新笔记名称"
-              className="min-w-0 flex-1 rounded-md border border-neutral-200 px-2.5 py-1 text-xs outline-none focus:border-blue-400"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-card px-2.5 py-1 text-xs text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
             />
             <button
               onClick={create}
-              className="shrink-0 rounded-md bg-neutral-900 px-2.5 py-1 text-xs text-white hover:bg-neutral-700"
+              className="shrink-0 rounded-lg bg-accent px-2.5 py-1 text-xs font-medium text-white shadow-sm transition-colors hover:bg-accent-hover"
             >
               新建
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="shrink-0 rounded-md border border-neutral-200 px-2.5 py-1 text-xs text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
+              className="shrink-0 rounded-lg border border-line px-2.5 py-1 text-xs text-muted transition-colors hover:bg-subtle hover:text-fg disabled:opacity-50"
               title="上传 .md/.txt/docx/doc/xmind/drawio/xls，自动转为 Markdown"
             >
               {uploading ? "上传中…" : "上传"}
@@ -345,16 +345,16 @@ export default function KnowledgePage() {
                 setSelectMode((v) => !v);
                 setSelected(new Set());
               }}
-              className={`rounded-md px-2 py-1 text-xs ${
+              className={`rounded-lg px-2 py-1 text-xs transition-colors ${
                 selectMode
-                  ? "bg-neutral-900 text-white"
-                  : "border border-neutral-200 text-neutral-600 hover:bg-neutral-100"
+                  ? "bg-accent font-medium text-white shadow-sm"
+                  : "border border-line text-muted hover:bg-subtle hover:text-fg"
               }`}
             >
               {selectMode ? "退出多选" : "多选"}
             </button>
             {selectMode && (
-              <span className="text-xs text-neutral-400">已选 {selected.size} 篇</span>
+              <span className="text-xs text-muted">已选 {selected.size} 篇</span>
             )}
           </div>
         </div>
@@ -389,7 +389,7 @@ export default function KnowledgePage() {
                 />
               ))}
               {visible.length === 0 && (
-                <p className="px-3 py-6 text-center text-xs text-neutral-400">没有匹配的笔记</p>
+                <p className="px-3 py-6 text-center text-xs text-muted">没有匹配的笔记</p>
               )}
             </>
           ) : (
@@ -412,14 +412,14 @@ export default function KnowledgePage() {
             ))
           )}
           {!search && hierarchy.roots.length === 0 && (
-            <p className="px-3 py-6 text-center text-xs text-neutral-400">暂无笔记</p>
+            <p className="px-3 py-6 text-center text-xs text-muted">暂无笔记</p>
           )}
         </div>
         {selectMode && selected.size > 0 && (
-          <div className="flex gap-2 border-t border-neutral-200 p-2">
+          <div className="flex gap-2 border-t border-line p-2">
             <button
               onClick={deleteSelected}
-              className="flex-1 rounded-md bg-rose-600 px-3 py-1.5 text-xs text-white hover:bg-rose-500"
+              className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-red-500"
             >
               删除选中（{selected.size}）
             </button>
@@ -428,7 +428,7 @@ export default function KnowledgePage() {
                 setSelected(new Set());
                 setSelectMode(false);
               }}
-              className="rounded-md border border-neutral-200 px-3 py-1.5 text-xs text-neutral-600 hover:bg-neutral-100"
+              className="rounded-lg border border-line px-3 py-1.5 text-xs text-muted transition-colors hover:bg-subtle hover:text-fg"
             >
               取消
             </button>
@@ -438,38 +438,38 @@ export default function KnowledgePage() {
 
       {/* 编辑区 / 图谱 */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-neutral-200 bg-white px-4 py-2">
-          <span className="text-sm text-neutral-500">
+        <div className="flex items-center justify-between border-b border-line bg-card px-4 py-2">
+          <span className="text-sm text-muted">
             {activeSlug ? activeSlug : "未选择笔记"}
-            {savedAt && <span className="ml-2 text-xs text-neutral-400">已保存 {savedAt}</span>}
+            {savedAt && <span className="ml-2 text-xs text-muted">已保存 {savedAt}</span>}
           </span>
           <div className="flex items-center gap-2">
             {activeSlug && view === "edit" && (
               <>
                 <button
                   onClick={save}
-                  className="rounded-md bg-neutral-900 px-3 py-1 text-sm text-white hover:bg-neutral-700"
+                  className="rounded-lg bg-accent px-3 py-1 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-hover"
                 >
                   保存
                 </button>
                 <button
                   onClick={remove}
-                  className="rounded-md border border-rose-200 px-3 py-1 text-sm text-rose-600 hover:bg-rose-50"
+                  className="rounded-lg border border-red-200 px-3 py-1 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/15"
                 >
                   删除
                 </button>
               </>
             )}
-            <div className="flex rounded-md border border-neutral-200 text-sm">
+            <div className="flex rounded-lg border border-line text-sm">
               <button
                 onClick={() => setView("edit")}
-                className={`px-3 py-1 ${view === "edit" ? "bg-neutral-900 text-white" : "text-neutral-600"}`}
+                className={`rounded-l-lg px-3 py-1 transition-colors ${view === "edit" ? "bg-accent font-medium text-white" : "text-muted hover:text-fg"}`}
               >
                 编辑
               </button>
               <button
                 onClick={() => setView("graph")}
-                className={`px-3 py-1 ${view === "graph" ? "bg-neutral-900 text-white" : "text-neutral-600"}`}
+                className={`rounded-r-lg px-3 py-1 transition-colors ${view === "graph" ? "bg-accent font-medium text-white" : "text-muted hover:text-fg"}`}
               >
                 图谱
               </button>
@@ -487,7 +487,7 @@ export default function KnowledgePage() {
                 fitView
                 proOptions={{ hideAttribution: true }}
               >
-                <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#d4d4d4" />
+                <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--line)" />
                 <Controls position="bottom-left" />
               </ReactFlow>
             </ReactFlowProvider>
@@ -498,19 +498,19 @@ export default function KnowledgePage() {
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="用 Markdown 编写笔记，[[双方括号]] 创建双链，#标签 分类…"
-              className="min-w-0 flex-1 resize-none p-4 font-mono text-sm leading-6 outline-none"
+              className="min-w-0 flex-1 resize-none bg-transparent p-4 font-mono text-sm leading-6 text-fg outline-none placeholder:text-muted"
             />
-            <div className="w-52 shrink-0 overflow-y-auto border-l border-neutral-200 bg-white p-3">
-              <div className="text-xs font-medium text-neutral-500">反向链接（{backlinks.length}）</div>
+            <div className="w-52 shrink-0 overflow-y-auto border-l border-line bg-card p-3">
+              <div className="text-xs font-medium text-muted">反向链接（{backlinks.length}）</div>
               <div className="mt-2 space-y-1">
                 {backlinks.length === 0 ? (
-                  <p className="text-xs text-neutral-400">暂无其他笔记链接到这里</p>
+                  <p className="text-xs text-muted">暂无其他笔记链接到这里</p>
                 ) : (
                   backlinks.map((b) => (
                     <button
                       key={b}
                       onClick={() => openNote(b)}
-                      className="block w-full truncate rounded-md px-2 py-1.5 text-left text-xs text-blue-600 hover:bg-neutral-100"
+                      className="block w-full truncate rounded-lg px-2 py-1.5 text-left text-xs text-accent transition-colors hover:bg-subtle"
                     >
                       ← {b}
                     </button>
@@ -520,7 +520,7 @@ export default function KnowledgePage() {
             </div>
           </div>
         ) : (
-          <div className="flex flex-1 items-center justify-center text-sm text-neutral-400">
+          <div className="flex flex-1 items-center justify-center text-sm text-muted">
             从左侧选择一篇笔记，或新建一篇
           </div>
         )}
@@ -547,18 +547,18 @@ function NoteButton({
   return (
     <div
       data-slug={note.slug}
-      className={`flex w-full items-center rounded-md text-left text-sm ${
+      className={`flex w-full items-center rounded-lg text-left text-sm transition-colors ${
         activeSlug === note.slug && !selectable
-          ? "bg-neutral-900 text-white"
-          : "text-neutral-700 hover:bg-neutral-100"
-      } ${checked ? "bg-blue-50" : ""}`}
+          ? "bg-accent-soft text-accent"
+          : "text-fg hover:bg-subtle"
+      } ${checked ? "bg-accent-soft" : ""}`}
     >
       {selectable && (
         <input
           type="checkbox"
           checked={checked ?? false}
           onChange={() => onToggle?.(note.slug)}
-          className="ml-2 shrink-0"
+          className="ml-2 shrink-0 accent-[var(--accent)]"
         />
       )}
       <button
@@ -569,7 +569,7 @@ function NoteButton({
       >
         <div className="truncate">{note.title}</div>
         <div
-          className={`mt-0.5 text-xs ${activeSlug === note.slug && !selectable ? "text-neutral-300" : "text-neutral-400"}`}
+          className={`mt-0.5 text-xs ${activeSlug === note.slug && !selectable ? "text-accent/70" : "text-muted"}`}
         >
           链接 {note.linkCount} · 反链 {note.backlinkCount}
         </div>
@@ -625,17 +625,17 @@ function TagGroup({
       <div className="group flex items-center">
         <button
           onClick={() => toggleGroup(tag)}
-          className="flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100"
+          className="flex min-w-0 flex-1 items-center justify-between rounded-lg px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-subtle hover:text-fg"
         >
           <span className="truncate">
             {isCollapsed(tag) ? "▸" : "▾"} #{tag}
           </span>
-          <span className="text-neutral-400">{total}</span>
+          <span className="text-muted">{total}</span>
         </button>
         {tag !== "未分类" && (
           <button
             onClick={() => onDeleteTag(tag)}
-            className="hidden shrink-0 rounded px-1 text-xs text-neutral-400 hover:text-rose-600 group-hover:block"
+            className="hidden shrink-0 rounded px-1 text-xs text-muted transition-colors hover:text-red-500 group-hover:block"
             title={`删除标签 #${tag}`}
           >
             ✕

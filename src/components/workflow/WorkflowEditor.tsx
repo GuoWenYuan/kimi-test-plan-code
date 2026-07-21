@@ -437,40 +437,40 @@ function EditorCanvas() {
           fitView
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#d4d4d4" />
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--line)" />
           <Controls position="bottom-left" />
           <MiniMap position="bottom-right" pannable zoomable className="!h-28 !w-40" />
         </ReactFlow>
 
         <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
-          {savedAt && <span className="text-xs text-neutral-400">已自动保存 {savedAt}</span>}
+          {savedAt && <span className="text-xs text-muted">已自动保存 {savedAt}</span>}
           <button
             onClick={() => setRunOpen((v) => !v)}
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white transition-colors hover:bg-blue-500"
+            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-hover disabled:opacity-50"
           >
             ▶ 试运行
           </button>
           <button
             onClick={() => setAiOpen((v) => !v)}
-            className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm text-neutral-600 transition-colors hover:bg-neutral-100"
+            className="rounded-lg border border-line bg-card px-3 py-1.5 text-sm text-muted shadow-sm transition-colors hover:bg-subtle hover:text-fg"
           >
             ✨ AI 生成
           </button>
           <button
             onClick={() => setTemplatesOpen((v) => !v)}
-            className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm text-neutral-600 transition-colors hover:bg-neutral-100"
+            className="rounded-lg border border-line bg-card px-3 py-1.5 text-sm text-muted shadow-sm transition-colors hover:bg-subtle hover:text-fg"
           >
             📦 模板
           </button>
           <button
             onClick={() => setKnowledgeOpen((v) => !v)}
-            className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm text-neutral-600 transition-colors hover:bg-neutral-100"
+            className="rounded-lg border border-line bg-card px-3 py-1.5 text-sm text-muted shadow-sm transition-colors hover:bg-subtle hover:text-fg"
           >
             📚 知识库
           </button>
           <button
             onClick={reset}
-            className="rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-sm text-neutral-600 transition-colors hover:bg-neutral-100"
+            className="rounded-lg border border-line bg-card px-3 py-1.5 text-sm text-muted shadow-sm transition-colors hover:bg-subtle hover:text-fg"
           >
             重置
           </button>

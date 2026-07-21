@@ -27,14 +27,6 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_id TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
-CREATE TABLE IF NOT EXISTS api_keys (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  name TEXT NOT NULL,
-  base_url TEXT NOT NULL,
-  api_key TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
 CREATE TABLE IF NOT EXISTS model_presets (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -138,23 +130,6 @@ function migrateSessionsJson(db: DatabaseSync): void {
   }
   markMigrated(file);
   console.log(`[db] 已从 sessions.json 迁移会话数据`);
-}
-
-function migrateApiKeysJson(db: DatabaseSync): void {
-  const file = path.join(DATA_DIR, "api-keys.json");
-  if (!fs.existsSync(file) || tableCount(db, "api_keys") > 0) return;
-  const rows = readJsonFile(file);
-  if (!Array.isArray(rows)) return;
-  const stmt = db.prepare(
-    "INSERT OR IGNORE INTO api_keys (id, user_id, name, base_url, api_key, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-  );
-  for (const r of rows as Record<string, unknown>[]) {
-    if (typeof r?.id === "string" && typeof r?.userId === "string") {
-      stmt.run(r.id, r.userId, String(r.name ?? ""), String(r.baseUrl ?? ""), String(r.apiKey ?? ""), String(r.createdAt ?? new Date().toISOString()));
-    }
-  }
-  markMigrated(file);
-  console.log(`[db] 已从 api-keys.json 迁移 API Key 数据`);
 }
 
 function migrateWorkflowsJson(db: DatabaseSync): void {
@@ -295,7 +270,6 @@ function migrateFromJson(db: DatabaseSync): void {
   try {
     migrateUsersJson(db);
     migrateSessionsJson(db);
-    migrateApiKeysJson(db);
     migrateWorkflowsJson(db);
     migratePromptsJson(db);
     migrateCustomNodesJson(db);

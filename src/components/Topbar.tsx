@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface TopbarProps {
   username: string;
@@ -17,18 +18,22 @@ export default function Topbar({ username, role }: TopbarProps) {
   }
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-gray-200 bg-white px-6">
-      <div className="text-sm text-gray-500">欢迎使用后台管理系统</div>
-      <div className="flex items-center gap-4">
-        <span className="text-sm text-gray-700">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-card px-6">
+      <div className="text-sm text-muted">欢迎使用个人工作站</div>
+      <div className="flex items-center gap-3">
+        <ThemeToggle />
+        <span className="flex items-center gap-2 text-sm text-fg">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-soft text-xs font-medium text-accent">
+            {username.slice(0, 1).toUpperCase()}
+          </span>
           {username}
-          <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+          <span className="rounded-full bg-subtle px-2 py-0.5 text-xs text-muted">
             {role === "super_admin" ? "超级管理员" : "普通用户"}
           </span>
         </span>
         <button
           onClick={handleLogout}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+          className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted transition-colors hover:bg-subtle hover:text-fg"
         >
           退出登录
         </button>

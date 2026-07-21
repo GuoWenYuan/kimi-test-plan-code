@@ -39,12 +39,17 @@ export default function RegisterForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
-      <div className="w-full max-w-sm rounded-xl bg-white p-8 shadow">
-        <h1 className="mb-6 text-center text-xl font-bold text-gray-900">注册账号</h1>
+    <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-card p-8 shadow-lg">
+        <div className="mb-6 flex flex-col items-center gap-2">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-lg font-bold text-white shadow">
+            站
+          </span>
+          <h1 className="text-xl font-bold text-fg">注册账号</h1>
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="username" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="username" className="mb-1 block text-sm font-medium text-fg">
               用户名
             </label>
             <input
@@ -54,11 +59,11 @@ export default function RegisterForm() {
               onChange={(e) => setUsername(e.target.value)}
               required
               autoComplete="username"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
             />
           </div>
           <div>
-            <label htmlFor="password" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="password" className="mb-1 block text-sm font-medium text-fg">
               密码
             </label>
             <input
@@ -68,11 +73,11 @@ export default function RegisterForm() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="new-password"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
             />
           </div>
           <div>
-            <label htmlFor="confirmPassword" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="confirmPassword" className="mb-1 block text-sm font-medium text-fg">
               确认密码
             </label>
             <input
@@ -82,21 +87,21 @@ export default function RegisterForm() {
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               autoComplete="new-password"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
             />
           </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-500">{error}</p>}
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="w-full rounded-lg bg-accent py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-hover disabled:opacity-50"
           >
             {loading ? "注册中…" : "注 册"}
           </button>
         </form>
-        <p className="mt-4 text-center text-sm text-gray-500">
+        <p className="mt-4 text-center text-sm text-muted">
           已有账号？{" "}
-          <Link href="/login" className="text-blue-600 hover:underline">
+          <Link href="/login" className="text-accent hover:underline">
             去登录
           </Link>
         </p>

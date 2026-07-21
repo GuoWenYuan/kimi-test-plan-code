@@ -124,19 +124,19 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
   };
 
   return (
-    <div className="flex w-72 shrink-0 flex-col border-l border-neutral-200 bg-white">
-      <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3">
+    <div className="flex w-72 shrink-0 flex-col border-l border-line bg-card">
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div className="flex items-center gap-2">
           <span
             className={`flex h-6 w-6 items-center justify-center rounded text-xs text-white ${def.color}`}
           >
             {def.icon}
           </span>
-          <span className="text-sm font-medium text-neutral-800">{def.title}节点</span>
+          <span className="text-sm font-medium text-fg">{def.title}节点</span>
         </div>
         <button
           onClick={onClose}
-          className="rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+          className="rounded p-1 text-muted transition-colors hover:bg-subtle hover:text-fg"
           aria-label="关闭"
         >
           ✕
@@ -145,17 +145,17 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-neutral-500">节点名称</span>
+          <span className="mb-1 block text-xs font-medium text-muted">节点名称</span>
           <input
             value={node.data.label}
             onChange={(e) => onChange(node.id, { label: e.target.value })}
-            className="w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+            className="w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
           />
         </label>
 
         {node.data.kind !== "start" && (
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-neutral-500">
+            <span className="mb-1 block text-xs font-medium text-muted">
               输入取值（可选）
             </span>
             <input
@@ -166,9 +166,9 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                   config: { ...node.data.config, inputPath: e.target.value },
                 })
               }
-              className="w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+              className="w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
             />
-            <span className="mt-1 block text-xs text-neutral-400">
+            <span className="mt-1 block text-xs text-muted">
               声明本节点只接收上游输出中的某个字段，取不到时运行报错。节点输出一律为
               JSON：纯文本会被包装为 {"{\"text\": \"...\"}"}（填 text 取值），数字/布尔为 {"{\"value\": ...}"}。
             </span>
@@ -177,7 +177,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
 
         {node.data.kind !== "start" && (
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-neutral-500">
+            <span className="mb-1 block text-xs font-medium text-muted">
               输入格式（可选）
             </span>
             <textarea
@@ -189,9 +189,9 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                   config: { ...node.data.config, inputFormat: e.target.value },
                 })
               }
-              className="w-full resize-y rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+              className="w-full resize-y rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
             />
-            <span className="mt-1 block text-xs text-neutral-400">
+            <span className="mt-1 block text-xs text-muted">
               声明本节点接受什么格式；上游接「格式转换」节点时会读取此声明自动转换。
             </span>
           </label>
@@ -199,18 +199,18 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
 
         {node.data.kind === "custom" && customDef && (
           <>
-            <div className="rounded-md border border-fuchsia-100 bg-fuchsia-50/50 p-3 text-xs text-neutral-600">
-              <div className="font-medium text-fuchsia-700">
+            <div className="rounded-lg border border-fuchsia-100 bg-fuchsia-50/50 p-3 text-xs text-muted dark:border-fuchsia-500/25 dark:bg-fuchsia-500/10">
+              <div className="font-medium text-fuchsia-700 dark:text-fuchsia-400">
                 {customDef.mode === "llm" ? "✨ 大模型节点" : "🧮 代码节点"}
               </div>
               <div className="mt-1">{customDef.description}</div>
-              <pre className="mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded bg-white p-2">
+              <pre className="mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap break-all rounded bg-card p-2">
                 {customDef.content}
               </pre>
             </div>
             {customDef.mode === "llm" && (
               <label className="block">
-                <span className="mb-1 block text-xs font-medium text-neutral-500">模型</span>
+                <span className="mb-1 block text-xs font-medium text-muted">模型</span>
                 <select
                   value={node.data.config.presetId ?? ""}
                   onChange={(e) =>
@@ -218,7 +218,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                       config: { ...node.data.config, presetId: e.target.value },
                     })
                   }
-                  className="w-full rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                  className="w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
                 >
                   <option value="">未选择</option>
                   {presets.map((p) => (
@@ -235,7 +235,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
         {node.data.kind === "unity" && (
           <>
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-neutral-500">桥接地址</span>
+              <span className="mb-1 block text-xs font-medium text-muted">桥接地址</span>
               <input
                 value={node.data.config.bridgeUrl ?? ""}
                 placeholder={DEFAULT_UNITY_BRIDGE}
@@ -244,21 +244,21 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                     config: { ...node.data.config, bridgeUrl: e.target.value },
                   })
                 }
-                className="w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                className="w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
               />
             </label>
             <div>
               <button
                 onClick={loadUnityCommands}
                 disabled={unityLoading}
-                className="w-full rounded-md border border-indigo-200 px-3 py-1.5 text-sm text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
+                className="w-full rounded-lg border border-accent/30 px-3 py-1.5 text-sm text-accent transition-colors hover:bg-accent-soft disabled:opacity-50"
               >
                 {unityLoading ? "读取中…" : "读取本机 Unity 指令"}
               </button>
-              {unityError && <p className="mt-1 text-xs text-rose-600">{unityError}</p>}
+              {unityError && <p className="mt-1 text-xs text-red-500">{unityError}</p>}
             </div>
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-neutral-500">Unity 指令</span>
+              <span className="mb-1 block text-xs font-medium text-muted">Unity 指令</span>
               <select
                 value={node.data.config.command ?? ""}
                 onChange={(e) =>
@@ -266,7 +266,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                     config: { ...node.data.config, command: e.target.value },
                   })
                 }
-                className="w-full rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                className="w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
               >
                 <option value="">未选择（先点上方按钮读取）</option>
                 {/* 已保存但当前不在桥端列表中的指令也保留显示，避免配置丢失 */}
@@ -283,13 +283,13 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                 ))}
               </select>
               {node.data.config.command && (
-                <span className="mt-1 block text-xs text-neutral-400">
+                <span className="mt-1 block text-xs text-muted">
                   {unityCmdList.find((c) => c.name === node.data.config.command)?.description ?? ""}
                 </span>
               )}
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-neutral-500">指令参数</span>
+              <span className="mb-1 block text-xs font-medium text-muted">指令参数</span>
               <textarea
                 rows={3}
                 value={node.data.config.args ?? ""}
@@ -299,7 +299,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                     config: { ...node.data.config, args: e.target.value },
                   })
                 }
-                className="w-full resize-y rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                className="w-full resize-y rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
               />
             </label>
           </>
@@ -307,7 +307,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
 
         {def.fields.map((field) => (
           <label key={field.key} className="block">
-            <span className="mb-1 block text-xs font-medium text-neutral-500">
+            <span className="mb-1 block text-xs font-medium text-muted">
               {field.label}
             </span>
             {field.type === "model" ? (
@@ -319,7 +319,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                       config: { ...node.data.config, [field.key]: e.target.value },
                     })
                   }
-                  className="w-full rounded-md border border-neutral-200 bg-white px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                  className="w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
                 >
                   <option value="">未选择</option>
                   {presets.map((p) => (
@@ -329,7 +329,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                   ))}
                 </select>
                 {presets.length === 0 && (
-                  <span className="mt-1 block text-xs text-neutral-400">
+                  <span className="mt-1 block text-xs text-muted">
                     暂无预设，请先到「模型」页添加。
                   </span>
                 )}
@@ -341,7 +341,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                     <select
                       value={templateId}
                       onChange={(e) => setTemplateId(e.target.value)}
-                      className="min-w-0 flex-1 rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs outline-none focus:border-blue-400"
+                      className="min-w-0 flex-1 rounded-lg border border-line bg-card px-2 py-1 text-xs text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
                     >
                       <option value="">选择提示词模板…</option>
                       {[...new Set(templates.map((t) => t.group))].map((g) => (
@@ -359,7 +359,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                     <button
                       onClick={importTemplate}
                       disabled={!templateId}
-                      className="shrink-0 rounded-md border border-neutral-200 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 disabled:opacity-40"
+                      className="shrink-0 rounded-lg border border-line px-2 py-1 text-xs text-muted transition-colors hover:bg-subtle hover:text-fg disabled:opacity-40"
                     >
                       导入
                     </button>
@@ -374,7 +374,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                       config: { ...node.data.config, [field.key]: e.target.value },
                     })
                   }
-                  className="w-full resize-y rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                  className="w-full resize-y rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
                 />
               </>
             ) : (
@@ -386,7 +386,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                     config: { ...node.data.config, [field.key]: e.target.value },
                   })
                 }
-                className="w-full rounded-md border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-blue-400"
+                className="w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
               />
             )}
           </label>
@@ -394,10 +394,10 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
       </div>
 
       {node.data.kind !== "start" && node.data.kind !== "end" && (
-        <div className="border-t border-neutral-100 p-3">
+        <div className="border-t border-line p-3">
           <button
             onClick={() => onDelete(node.id)}
-            className="w-full rounded-md border border-rose-200 px-3 py-1.5 text-sm text-rose-600 transition-colors hover:bg-rose-50"
+            className="w-full rounded-lg border border-rose-200 px-3 py-1.5 text-sm text-rose-600 transition-colors hover:bg-rose-50 dark:border-rose-500/25 dark:text-rose-400 dark:hover:bg-rose-500/10"
           >
             删除节点
           </button>
