@@ -15,6 +15,20 @@ interface Props {
   onAddCustom: (def: CustomNodeDef) => void;
 }
 
+/** 模糊匹配：目标串包含查询串，或查询串字符按顺序出现（子序列）即命中 */
+function fuzzyMatch(query: string, target: string): boolean {
+  const q = query.toLowerCase().trim();
+  if (!q) return true;
+  const t = target.toLowerCase();
+  if (t.includes(q)) return true;
+  let i = 0;
+  for (const ch of t) {
+    if (ch === q[i]) i++;
+    if (i === q.length) return true;
+  }
+  return false;
+}
+
 export default function NodePalette({ onAdd, onAddCustom }: Props) {
   const [customNodes, setCustomNodes] = useState<CustomNodeDef[]>([]);
   const [presets, setPresets] = useState<ModelPreset[]>([]);
@@ -25,7 +39,21 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState("");
   const [uploading, setUploading] = useState(false);
+  // 搜索与分组折叠
+  const [query, setQuery] = useState("");
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const searching = query.trim().length > 0;
+  /** 搜索时强制展开；否则按 collapsed 集合 */
+  const isOpen = (key: string) => searching || !collapsed.has(key);
+  const toggle = (key: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   /** 上传本地 skill 文件（.md/.txt），作为 llm 类自定义节点 */
   const uploadSkill = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,6 +126,29 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
     return [...map.entries()];
   }, []);
 
+  // 模糊搜索过滤（搜索时隐藏空分组）
+  const fBasic = basicNodes.filter((d) => fuzzyMatch(query, `${d.title} ${d.description} ${d.kind}`));
+  const fBuiltinGroups = builtinGroups
+    .map(([g, defs]) => [g, defs.filter((d) => fuzzyMatch(query, `${d.title} ${d.description} ${d.kind} ${g}`))] as const)
+    .filter(([, defs]) => !searching || defs.length > 0);
+  const fCustomGroups = groups
+    .map(([g, items]) => [g, items.filter((d) => fuzzyMatch(query, `${d.name} ${d.description} ${d.tag}`))] as const)
+    .filter(([, items]) => !searching || items.length > 0);
+  const noMatch = searching && fBasic.length === 0 && fBuiltinGroups.length === 0 && fCustomGroups.length === 0;
+
+  /** 分组标题（可点击折叠/展开，搜索时强制展开）—— render 辅助函数而非组件，避免每次渲染重建组件类型 */
+  const sectionHeader = (id: string, title: string, count: number) => (
+    <button
+      onClick={() => toggle(id)}
+      className="flex w-full items-center gap-1 px-3 pb-1 pt-3 text-left text-xs font-medium text-muted transition-colors hover:text-fg"
+      title={isOpen(id) ? "点击折叠" : "点击展开"}
+    >
+      <span className={`inline-block transition-transform duration-150 ${isOpen(id) ? "rotate-90" : ""}`}>▸</span>
+      #{title}
+      <span className="ml-auto text-[10px]">{count}</span>
+    </button>
+  );
+
   const renderNodeButton = (def: (typeof CREATABLE_NODES)[number]) => (
     <button
       key={def.kind}
@@ -169,25 +220,43 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
       <div className="border-b border-line px-4 py-3 text-xs font-medium text-muted">
         添加节点（点击或拖入画布）
       </div>
+      {/* 模糊搜索 */}
+      <div className="border-b border-line p-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="搜索节点（模糊匹配）"
+          className="w-full rounded-md border border-line bg-card px-2 py-1.5 text-xs text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
+        />
+      </div>
       <div className="flex-1 space-y-1 overflow-y-auto p-2">
-        {basicNodes.map(renderNodeButton)}
+        {noMatch && <p className="px-3 py-4 text-center text-xs text-muted">无匹配节点</p>}
 
-        {/* 内置分组节点（如"外部工具"） */}
-        {builtinGroups.map(([g, defs]) => (
+        {/* 基础节点 */}
+        {fBasic.length > 0 && (
+          <div>
+            {sectionHeader("基础节点", "基础节点", fBasic.length)}
+            {isOpen("基础节点") && fBasic.map(renderNodeButton)}
+          </div>
+        )}
+
+        {/* 内置分组节点（如"外部工具"、PIAgent） */}
+        {fBuiltinGroups.map(([g, defs]) => (
           <div key={g}>
-            <div className="px-3 pb-1 pt-3 text-xs font-medium text-muted">#{g}</div>
-            {defs.map(renderNodeButton)}
+            {sectionHeader(g, g, defs.length)}
+            {isOpen(g) && defs.map(renderNodeButton)}
           </div>
         ))}
 
         {/* 自定义节点：按标签分组 */}
-        {groups.length > 0 && (
+        {fCustomGroups.length > 0 && (
           <div className="px-3 pb-1 pt-3 text-xs font-medium text-muted">自定义节点</div>
         )}
-        {groups.map(([g, items]) => (
+        {fCustomGroups.map(([g, items]) => (
           <div key={g}>
-            <div className="px-3 py-1 text-xs text-muted">#{g}</div>
-            {items.map((def) => (
+            {sectionHeader(`custom:${g}`, g, items.length)}
+            {isOpen(`custom:${g}`) &&
+              items.map((def) => (
               <div key={def.id} className="group relative">
                 <button
                   onClick={() => onAddCustom(def)}
@@ -214,7 +283,7 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
                   ✕
                 </button>
               </div>
-            ))}
+              ))}
           </div>
         ))}
       </div>

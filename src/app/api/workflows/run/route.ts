@@ -1,6 +1,12 @@
 import { runWorkflow, type RunEdge, type RunEvent, type RunNode } from "@/lib/workflow-engine";
 import { createClientCall, type ClientCallPayload } from "@/lib/client-calls";
 import { getSessionUser } from "@/lib/auth";
+import { NODE_DEFS } from "@/components/workflow/nodeDefs";
+
+/** PIAgent 分组的节点 kind 集合（仅 super_admin guowenyuan 可执行；新增 PIAgent 节点自动纳入） */
+const PIAGENT_KINDS = new Set(
+  Object.values(NODE_DEFS).filter((d) => d.group === "PIAgent").map((d) => d.kind)
+);
 
 /**
  * 运行工作流：SSE 流式返回执行过程。
@@ -18,6 +24,13 @@ export async function POST(req: Request) {
   }
   if (!nodes.some((n: RunNode) => n.data?.kind === "start")) {
     return Response.json({ error: "缺少开始节点" }, { status: 400 });
+  }
+  // PIAgent 节点（pi-service 在服务器上以部署账号权限运行）仅 guowenyuan 可用
+  if (
+    !(user.role === "super_admin" && user.username === "guowenyuan") &&
+    nodes.some((n: RunNode) => PIAGENT_KINDS.has(n.data?.kind))
+  ) {
+    return Response.json({ error: "PIAgent 节点仅管理员 guowenyuan 可用" }, { status: 403 });
   }
 
   const encoder = new TextEncoder();

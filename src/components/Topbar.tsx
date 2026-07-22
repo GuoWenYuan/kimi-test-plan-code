@@ -23,7 +23,7 @@ export default function Topbar({ username, role }: TopbarProps) {
       <div className="flex items-center gap-3">
         <ThemeToggle />
         <span className="flex items-center gap-2 text-sm text-fg">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-soft text-xs font-medium text-accent">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-soft text-xs font-medium text-accent transition-all duration-200 hover:scale-110 hover:ring-2 hover:ring-accent/40">
             {username.slice(0, 1).toUpperCase()}
           </span>
           {username}

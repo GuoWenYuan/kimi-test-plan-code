@@ -9,7 +9,8 @@ export type NodeKind =
   | "custom"
   | "condition"
   | "convert"
-  | "unity";
+  | "unity"
+  | "pi-code-reader";
 
 export interface NodeDef {
   kind: NodeKind;
@@ -158,6 +159,21 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     group: "外部工具",
     // 配置由 ConfigPanel 特判渲染（指令下拉需浏览器拉取本机 Bridge 的命令列表）
     fields: [],
+  },
+  // PIAgent 分组：pi-service / 本机桥的子 agent 节点（规范：所有 PIAgent 子 agent 都必须在此注册为节点；
+  // 该分组节点仅 super_admin guowenyuan 可执行，运行路由按 group 统一拦截）
+  "pi-code-reader": {
+    kind: "pi-code-reader",
+    title: "本机代码读取",
+    icon: "📂",
+    description: "PIAgent：读取你电脑上的文件/文件夹内容，原样固定输出给下游节点",
+    color: "bg-slate-500",
+    creatable: true,
+    group: "PIAgent",
+    fields: [
+      // 只需路径：文件 → 内容；文件夹 → 目录树 + 各文件内容。桥地址默认 39275、令牌自动复用 Pi agent 页保存值
+      { key: "path", label: "文件/文件夹路径", placeholder: "本机桥根目录下的路径，如 src/main.ts 或 src，可用 {{input.xxx}}" },
+    ],
   },
 };
 

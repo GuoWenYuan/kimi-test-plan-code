@@ -1,0 +1,13 @@
+{
+  "name": "pi-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pi agent 独立服务：HTTP/SSE 包装 pi CLI，供主应用经 compose 内网调用",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.81.1"
+  }
+}

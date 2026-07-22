@@ -326,7 +326,7 @@ function EditorCanvas() {
         label?: string;
         delta?: string;
         callId?: string;
-        payload?: { url: string; name: string; args: string };
+        payload?: { url: string; name: string; args: string; token?: string };
         result?: { status: NodeStatus; output?: string; error?: string };
         results?: Record<string, NodeStatus>;
         finalOutput?: string;
@@ -357,9 +357,17 @@ function EditorCanvas() {
             let result = "";
             let error = "";
             try {
+              // 桥令牌：节点配置优先；配置留空（PIAgent 本机节点）则复用 Pi agent 页面保存的令牌，避免重复填写
+              const bridgeToken =
+                payload.token !== undefined
+                  ? payload.token || localStorage.getItem("local-bridge-token") || ""
+                  : "";
               const r = await fetch(`${payload.url}/execute`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(bridgeToken ? { "X-Bridge-Token": bridgeToken } : {}),
+                },
                 body: JSON.stringify({ name: payload.name, args: payload.args }),
               });
               const data = await r.json().catch(() => null);

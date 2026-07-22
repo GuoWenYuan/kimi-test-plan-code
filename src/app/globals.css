@@ -63,6 +63,76 @@ body {
   scrollbar-color: var(--line) transparent;
 }
 
+/* ================= 动效 ================= */
+
+@keyframes ws-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes ws-fade-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes ws-pop {
+  0% { opacity: 0; transform: scale(0.5) rotate(-30deg); }
+  60% { transform: scale(1.1) rotate(6deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+@keyframes ws-wiggle {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(-10deg) scale(1.05); }
+  75% { transform: rotate(10deg) scale(1.05); }
+}
+@keyframes ws-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(24px, -28px) scale(1.1); }
+}
+
+/* 页面进入（纯淡入，避免位移带来的晃动感） */
+.anim-page { animation: ws-fade-in 0.2s ease-out both; }
+/* 卡片进入（可配 inline animationDelay 做级联） */
+.anim-card { animation: ws-fade-up 0.3s ease-out both; }
+/* 图标/小元素弹出 */
+.anim-pop { animation: ws-pop 0.35s ease both; }
+
+/* logo 悬停摇摆 */
+.logo-badge:hover { animation: ws-wiggle 0.5s ease; }
+
+/* 按钮全局按压反馈 */
+button {
+  transition-property: transform, background-color, border-color, color, box-shadow;
+  transition-duration: 0.15s;
+}
+button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+/* 登录/注册页漂浮装饰光斑 */
+.ws-blob {
+  position: fixed;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.22;
+  pointer-events: none;
+  animation: ws-float 9s ease-in-out infinite;
+}
+[data-theme="dark"] .ws-blob {
+  opacity: 0.16;
+}
+
+/* 尊重系统「减弱动态效果」设置 */
+@media (prefers-reduced-motion: reduce) {
+  .anim-page,
+  .anim-card,
+  .anim-pop,
+  .ws-blob,
+  .logo-badge:hover {
+    animation: none !important;
+  }  button:active:not(:disabled) {
+    transform: none;
+  }
+}
+
 /* 主题切换时卡片/边框平滑过渡 */
 .themed,
 .themed * {

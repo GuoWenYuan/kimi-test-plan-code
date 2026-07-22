@@ -2,6 +2,8 @@
 
 # dependencies
 /node_modules
+/pi-service/node_modules
+pi-service/.pi-subagents/
 /.pnp
 .pnp.*
 .yarn/*
@@ -52,3 +54,6 @@ __pycache__/
 *.db-wal
 *.db-shm
 *.migrated.bak
+
+# 运行日志
+server.log

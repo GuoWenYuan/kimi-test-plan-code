@@ -35,9 +35,12 @@ export default function LoginForm() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-line bg-card p-8 shadow-lg">
+      {/* 漂浮装饰光斑 */}
+      <div className="ws-blob left-[12%] top-[18%] h-64 w-64 bg-accent" />
+      <div className="ws-blob bottom-[15%] right-[10%] h-72 w-72 bg-accent" style={{ animationDelay: "-4.5s" }} />
+      <div className="anim-card relative w-full max-w-sm rounded-2xl border border-line bg-card p-8 shadow-lg">
         <div className="mb-6 flex flex-col items-center gap-2">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-lg font-bold text-white shadow">
+          <span className="anim-pop flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-lg font-bold text-white shadow">
             站
           </span>
           <h1 className="text-xl font-bold text-fg">个人工作站</h1>

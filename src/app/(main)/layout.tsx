@@ -12,7 +12,7 @@ export default async function MainLayout({
   return (
     // h-screen + min-h-0：工作流编辑器等页面需要充满剩余高度且不出现整页滚动
     <div className="flex h-screen overflow-hidden">
-      <Sidebar role={user.role} />
+      <Sidebar role={user.role} username={user.username} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar username={user.username} role={user.role} />
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>

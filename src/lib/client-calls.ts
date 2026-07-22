@@ -16,6 +16,8 @@ export interface ClientCallPayload {
   name: string;
   /** 已渲染模板后的参数字符串 */
   args: string;
+  /** 桥端令牌（本机桥需要；Unity Bridge 无令牌不传） */
+  token?: string;
 }
 
 interface Pending {

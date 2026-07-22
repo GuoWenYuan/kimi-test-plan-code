@@ -1,0 +1,30 @@
+services:
+  workbench:
+    build: .
+    container_name: workbench
+    ports:
+      - "3000:3000"
+    volumes:
+      # SQLite 数据持久化到宿主机 ./data
+      - ./data:/app/data
+    environment:
+      - DATABASE_PATH=/app/data/app.db
+      - PI_SERVICE_URL=http://pi-service:39273
+      - PI_SERVICE_TOKEN=${PI_SERVICE_TOKEN}
+    depends_on:
+      - pi-service
+    restart: unless-stopped
+
+  pi-service:
+    build: ./pi-service
+    container_name: pi-service
+    # 不发布端口到宿主机，仅 compose 内网可达（另有 PI_SERVICE_TOKEN 校验兜底）
+    volumes:
+      # pi 会话与 models.json 持久化到宿主机 ./data/pi-agent
+      - ./data/pi-agent:/data/pi-agent
+      # 代码读取子 agent 的可读根（只读挂载整个仓库；要读其他目录在 /workspace 下加挂载）
+      - .:/workspace:ro
+    environment:
+      - PI_SERVICE_TOKEN=${PI_SERVICE_TOKEN}
+      - CODE_ROOT=/workspace
+    restart: unless-stopped

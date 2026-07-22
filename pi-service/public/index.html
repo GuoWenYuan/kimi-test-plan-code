@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PIAgent 本机版</title>
+<style>
+  :root { --bg:#f7f7f9; --card:#fff; --line:#e2e3e8; --fg:#1c1d21; --muted:#757884; --accent:#4f46e5; --accent-soft:#eef0fe; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141519; --card:#1d1f26; --line:#33363f; --fg:#e8e9ee; --muted:#9a9db0; --accent:#818cf8; --accent-soft:#23253a; }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { font: 14px/1.6 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--fg); height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--card); }
+  header b { font-size: 14px; }
+  header .tag { font-size: 11px; color: var(--muted); }
+  header .sp { flex: 1; }
+  input, textarea { background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font: inherit; }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+  button { border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  button:hover { background: var(--accent-soft); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  details.cfg { position: relative; }
+  details.cfg summary { cursor: pointer; font-size: 12px; color: var(--accent); list-style: none; }
+  details.cfg .panel { position: absolute; right: 0; top: 26px; z-index: 10; width: 320px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / .15); display: grid; gap: 6px; }
+  details.cfg label { font-size: 11px; color: var(--muted); }
+  details.cfg input { width: 100%; }
+  main { flex: 1; overflow-y: auto; padding: 16px 12px; }
+  .wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 12px; }
+  .msg { max-width: 85%; border-radius: 12px; padding: 8px 12px; white-space: pre-wrap; word-break: break-word; }
+  .user { justify-self: end; background: var(--accent-soft); }
+  .bot { justify-self: start; background: var(--card); border: 1px solid var(--line); }
+  .bot.err { border-color: #e88; background: color-mix(in srgb, #e88 8%, var(--card)); }
+  .think { font-size: 12px; color: var(--muted); }
+  .think summary { cursor: pointer; }
+  .tool { font: 11px ui-monospace, Consolas, monospace; color: var(--muted); margin-bottom: 2px; }
+  .tool .ok { color: #3a3; } .tool .bad { color: #d44; }
+  .empty { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--muted); text-align: center; }
+  footer { border-top: 1px solid var(--line); padding: 10px 12px; background: var(--card); }
+  footer .row { max-width: 760px; margin: 0 auto; display: flex; gap: 8px; }
+  footer input { flex: 1; }
+  .cursor { animation: blink 1s infinite; color: var(--muted); }
+  @keyframes blink { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+<header>
+  <b>PIAgent 本机版</b>
+  <span class="tag" id="modelTag"></span>
+  <span class="sp"></span>
+  <details class="cfg" id="cfgBox">
+    <summary>⚙ 模型设置</summary>
+    <div class="panel">
+      <label>Base URL（OpenAI 兼容；Kimi Code 端点自动走 Anthropic 协议）</label>
+      <input id="cfgBaseUrl" placeholder="https://api.deepseek.com" />
+      <label>API Key</label>
+      <input id="cfgApiKey" type="password" placeholder="sk-..." />
+      <label>模型 ID</label>
+      <input id="cfgModel" placeholder="deepseek-chat" />
+      <label>访问令牌（仅当服务设了 PI_SERVICE_TOKEN 时必填）</label>
+      <input id="cfgToken" type="password" placeholder="（可留空）" />
+      <button class="primary" id="cfgSave">保存</button>
+    </div>
+  </details>
+  <button id="newChat">新会话</button>
+</header>
+<main id="main"><div class="wrap" id="list"><div class="empty" id="empty">配置模型后开始对话。<br/>所有操作都发生在<b>本机</b>（pi 直接读写本机文件、执行命令）。</div></div></main>
+<footer>
+  <div class="row">
+    <input id="input" placeholder="输入指令，Enter 发送…" />
+    <button class="primary" id="sendBtn">发送</button>
+    <button id="stopBtn" hidden>停止</button>
+  </div>
+</footer>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const LS = {
+  get: (k, d = "") => localStorage.getItem("piagent-" + k) ?? d,
+  set: (k, v) => localStorage.setItem("piagent-" + k, v),
+};
+// 恢复设置与会话
+for (const k of ["baseUrl", "apiKey", "model", "token"]) $("cfg" + k[0].toUpperCase() + k.slice(1)).value = LS.get(k);
+let sessionId = LS.get("sessionId") || crypto.randomUUID();
+LS.set("sessionId", sessionId);
+function uuid() { return crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 3) | 8).toString(16); }); }
+function modelTag() { $("modelTag").textContent = LS.get("model") ? "模型：" + LS.get("model") : "未配置模型"; }
+modelTag();
+
+$("cfgSave").onclick = () => {
+  for (const k of ["baseUrl", "apiKey", "model", "token"]) LS.set(k, $("cfg" + k[0].toUpperCase() + k.slice(1)).value.trim());
+  modelTag();
+  $("cfgBox").open = false;
+};
+$("newChat").onclick = () => { sessionId = uuid(); LS.set("sessionId", sessionId); $("list").innerHTML = ""; };
+
+let busy = false, ctrl = null;
+const list = $("list");
+function addMsg(role) {
+  $("empty")?.remove();
+  const el = document.createElement("div");
+  el.className = "msg " + role;
+  list.appendChild(el);
+  el._text = ""; el._think = "";
+  return el;
+}
+function render(el, streaming) {
+  let html = "";
+  if (el._think) html += '<details class="think"><summary>思考过程</summary>' + esc(el._think) + "</details>";
+  html += (el._tools || []).map((t) => '<div class="tool">⚙ ' + esc(t.tool + (t.args ? " " + t.args : "")) + (t.isError === true ? ' <span class="bad">✗</span>' : t.isError === false ? ' <span class="ok">✓</span>' : "") + "</div>").join("");
+  html += esc(el._text) + (streaming ? '<span class="cursor">▍</span>' : "");
+  el.innerHTML = html;
+  $("main").scrollTop = $("main").scrollHeight;
+}
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML.replace(/\n/g, "<br/>"); }
+
+async function send() {
+  const text = $("input").value.trim();
+  if (!text || busy) return;
+  if (!LS.get("baseUrl") || !LS.get("apiKey") || !LS.get("model")) { alert("请先在「模型设置」里填 Base URL / API Key / 模型 ID"); $("cfgBox").open = true; return; }
+  $("input").value = "";
+  addMsg("user").textContent = text;
+  const bot = addMsg("bot");
+  bot._tools = [];
+  setBusy(true);
+  ctrl = new AbortController();
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(LS.get("token") ? { "x-pi-token": LS.get("token") } : {}) },
+      body: JSON.stringify({ message: text, sessionId, preset: { baseUrl: LS.get("baseUrl"), apiKey: LS.get("apiKey"), model: LS.get("model") } }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok || !res.body) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error ?? "请求失败（" + res.status + "）");
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop() ?? "";
+      for (const chunk of chunks) {
+        const line = chunk.trim();
+        if (!line.startsWith("data:")) continue;
+        let e; try { e = JSON.parse(line.slice(5)); } catch { continue; }
+        if (e.type === "delta") bot._text += e.text;
+        else if (e.type === "think") bot._think += e.text;
+        else if (e.type === "tool_start") bot._tools.push({ tool: e.tool, args: e.args });
+        else if (e.type === "tool_end") { for (let i = bot._tools.length - 1; i >= 0; i--) { if (bot._tools[i].tool === e.tool && bot._tools[i].isError === undefined) { bot._tools[i].isError = !!e.isError; break; } } }
+        else if (e.type === "error") { bot.classList.add("err"); bot._text += (bot._text ? "\n\n" : "") + "[错误] " + e.message; }
+        render(bot, true);
+      }
+    }
+  } catch (err) {
+    if (!ctrl.signal.aborted) { bot.classList.add("err"); bot._text += (bot._text ? "\n\n" : "") + "[错误] " + (err.message || err); }
+  } finally {
+    render(bot, false);
+    setBusy(false);
+    ctrl = null;
+  }
+}
+function setBusy(v) {
+  busy = v;
+  $("sendBtn").hidden = v;
+  $("stopBtn").hidden = !v;
+  $("sendBtn").disabled = v;
+}
+$("sendBtn").onclick = send;
+$("stopBtn").onclick = () => ctrl?.abort();
+$("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) send(); });
+</script>
+</body>
+</html>

@@ -442,6 +442,23 @@ export async function runWorkflow(
           output = parseJsonText(text);
           break;
         }
+        case "pi-code-reader": {
+          // PIAgent 本机代码读取：读取本机文件/文件夹内容，固定输出原样传给下游。
+          // 经 client_call 由浏览器中转到用户本机桥（仅 guowenyuan，运行路由已拦截）；
+          // 桥地址默认 39275，令牌留空由浏览器自动复用 Pi agent 页保存值
+          const targetPath = renderTemplate(config.path ?? "", input, outputs, labels, knowledge).trim();
+          if (!targetPath) throw new Error("未填写文件/文件夹路径");
+          if (!onClientCall) throw new Error("当前运行方式不支持本机代码读取节点（需要浏览器页面保持打开）");
+          const bridgeUrl = (config.bridgeUrl ?? "").trim() || "http://127.0.0.1:39275";
+          const token = (config.token ?? "").trim();
+          output = await onClientCall(node.id, node.data.label, {
+            url: bridgeUrl,
+            name: "fs.readAny",
+            args: JSON.stringify({ path: targetPath }),
+            token,
+          });
+          break;
+        }
         case "custom": {
           // AI 生成的自定义节点：llm 模式执行提示词，code 模式执行代码
           const def = await getCustomNode(config.customId ?? "");

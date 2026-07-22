@@ -1,0 +1,9 @@
+node_modules
+.next
+data
+.git
+server.log
+*.tsbuildinfo
+docs
+Dockerfile
+docker-compose.yml
