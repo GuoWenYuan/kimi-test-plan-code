@@ -29,6 +29,9 @@ export interface AiTool {
   tokenCommand?: string;
   /** 打开时的路径（缺省 /）；如 T3 Code 配对页为 /pair，配合 tokenHash 直达 /pair#token=... */
   path?: string;
+  /** 该工具的 Web UI 支持 URL hash 注入模型预设（#preset=base64url(JSON {name,model,baseUrl,apiKey})），
+   *  页面会渲染预设下拉框（数据源 /api/models，当前用户账号的预设）并把选中预设拼入 URL */
+  modelPreset?: boolean;
   /** 本机启动命令（local 模式离线时展示，一键复制） */
   startCommand?: string;
   /** 文档链接 */
@@ -52,9 +55,10 @@ export const AI_TOOLS: AiTool[] = [
     id: "pi-agent-local",
     name: "PIAgent 本机版",
     description:
-      "运行在你自己电脑上的 PIAgent（pi-service 本机部署）：浏览器直连本机 127.0.0.1:39273，pi 直接读写你本机的文件与命令，不经过部署服务器。模型预设（Base URL/Key/模型）在打开后的页面「模型设置」里填写。首次部署见仓库 pi-service/DEPLOY.md。",
+      "运行在你自己电脑上的 PIAgent（pi-service 本机部署）：浏览器直连本机 127.0.0.1:39273，pi 直接读写你本机的文件与命令，不经过部署服务器。下方选择模型预设后打开即自动配置（#preset= 注入，需本机 pi-service 为最新版；旧版请在页面「模型设置」手动填写）。首次部署见仓库 pi-service/DEPLOY.md。",
     local: true,
     port: 39273,
+    modelPreset: true,
     startCommand: "cd pi-service && npm install --allow-remote=all && npm start",
   },
 ];

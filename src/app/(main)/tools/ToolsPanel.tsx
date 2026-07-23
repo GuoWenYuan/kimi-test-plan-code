@@ -5,16 +5,41 @@ import { AI_TOOLS, type AiTool } from "@/lib/ai-tools";
 
 type Status = "checking" | "online" | "offline";
 
+/** 当前用户的模型预设（/api/models 返回，含 apiKey，本人数据） */
+interface ModelPreset {
+  id: string;
+  name: string;
+  model: string;
+  baseUrl: string;
+  apiKey: string;
+}
+
+/** base64url 编码（UTF-8 安全，去 padding），供 #preset= hash 使用 */
+function b64url(s: string): string {
+  return btoa(unescape(encodeURIComponent(s)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
 /** 工具的浏览器访问地址：local 模式指向用户自己电脑的 127.0.0.1，否则用当前网页主机名 */
-function toolUrl(t: AiTool, port: number, token: string): string {
+function toolUrl(t: AiTool, port: number, token: string, preset?: ModelPreset | null): string {
   const host = t.local ? "127.0.0.1" : location.hostname;
   const p = t.local ? port : (t.publicPort ?? port);
-  const hash = t.tokenHash && token ? `#token=${encodeURIComponent(token)}` : "";
+  const hashParts: string[] = [];
+  if (t.tokenHash && token) hashParts.push(`token=${encodeURIComponent(token)}`);
+  if (t.modelPreset && preset) {
+    hashParts.push(
+      `preset=${b64url(JSON.stringify({ name: preset.name, model: preset.model, baseUrl: preset.baseUrl, apiKey: preset.apiKey }))}`
+    );
+  }
+  const hash = hashParts.length ? `#${hashParts.join("&")}` : "";
   return `${location.protocol}//${host}:${p}${t.path ?? "/"}${hash}`;
 }
 
 const tokenKey = (id: string) => `ai-tool-token-${id}`;
 const portKey = (id: string) => `ai-tool-port-${id}`;
+const presetKey = (id: string) => `ai-tool-preset-${id}`;
 
 export default function ToolsPanel() {
   const [status, setStatus] = useState<Record<string, Status>>({});
@@ -36,6 +61,16 @@ export default function ToolsPanel() {
     return saved;
   });
   const [activeId, setActiveId] = useState<string | null>(null);
+  // modelPreset 工具：当前用户模型预设与各工具选中的预设 id（存 localStorage）
+  const [presets, setPresets] = useState<ModelPreset[]>([]);
+  const [presetSel, setPresetSel] = useState<Record<string, string>>(() => {
+    if (typeof window === "undefined") return {};
+    const saved: Record<string, string> = {};
+    for (const t of AI_TOOLS) {
+      if (t.modelPreset) saved[t.id] = localStorage.getItem(presetKey(t.id)) ?? "";
+    }
+    return saved;
+  });
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [maximized, setMaximized] = useState(false);
   // 打开工具后自动把卡片区收起为标签条，让工作区占满页面
@@ -93,6 +128,30 @@ export default function ToolsPanel() {
     return () => clearInterval(timer);
   }, [checkAll]);
 
+  // 有 modelPreset 工具时拉取当前用户模型预设（含 apiKey，本人数据，与 /models 页同接口）
+  useEffect(() => {
+    if (!AI_TOOLS.some((t) => t.modelPreset)) return;
+    async function load() {
+      const res = await fetch("/api/models").catch(() => null);
+      if (res?.ok) setPresets((await res.json()) as ModelPreset[]);
+    }
+    load();
+  }, []);
+
+  /** 工具当前选中的预设（未选时回退第一个） */
+  const presetFor = useCallback(
+    (t: AiTool): ModelPreset | null => {
+      if (!t.modelPreset || presets.length === 0) return null;
+      return presets.find((p) => p.id === presetSel[t.id]) ?? presets[0];
+    },
+    [presets, presetSel],
+  );
+
+  function savePresetSel(id: string, value: string) {
+    setPresetSel((m) => ({ ...m, [id]: value }));
+    localStorage.setItem(presetKey(id), value);
+  }
+
   function saveToken(id: string, value: string) {
     setTokens((m) => ({ ...m, [id]: value }));
     localStorage.setItem(tokenKey(id), value);
@@ -144,8 +203,8 @@ export default function ToolsPanel() {
     if (!active) return null;
     const iframe = (
       <iframe
-        key={`${active.id}-${effPort(active)}-${tokens[active.id] ?? ""}`}
-        src={toolUrl(active, effPort(active), tokens[active.id] ?? "")}
+        key={`${active.id}-${effPort(active)}-${tokens[active.id] ?? ""}-${presetFor(active)?.id ?? ""}`}
+        src={toolUrl(active, effPort(active), tokens[active.id] ?? "", presetFor(active))}
         title={active.name}
         onLoad={() => setStatus((s) => ({ ...s, [active.id]: "online" }))}
         className="min-h-0 w-full flex-1"
@@ -321,6 +380,28 @@ export default function ToolsPanel() {
                 )}
               </div>
 
+              {t.modelPreset &&
+                (presets.length === 0 ? (
+                  <p className="text-xs text-muted">
+                    暂无模型预设：请先到「模型」页添加，或打开后在工具页面内手动填写。
+                  </p>
+                ) : (
+                  <label className="flex items-center gap-1 text-xs text-muted">
+                    <span className="shrink-0">模型预设</span>
+                    <select
+                      value={presetFor(t)?.id ?? ""}
+                      onChange={(e) => savePresetSel(t.id, e.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-line bg-card px-2 py-1 text-xs text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
+                    >
+                      {presets.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}（{p.model}）
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+
               {t.tokenHash && t.tokenCommand && (
                 <div className="flex items-center gap-2 text-xs">
                   <span className="shrink-0 text-muted">获取/重置令牌</span>
@@ -346,7 +427,7 @@ export default function ToolsPanel() {
                   嵌入打开
                 </button>
                 <button
-                  onClick={() => window.open(toolUrl(t, effPort(t), tokens[t.id] ?? ""), "_blank")}
+                  onClick={() => window.open(toolUrl(t, effPort(t), tokens[t.id] ?? "", presetFor(t)), "_blank")}
                   className="rounded-lg border border-line px-3 py-1.5 text-muted transition-colors hover:bg-subtle hover:text-fg"
                 >
                   新标签打开

@@ -80,16 +80,39 @@ const LS = {
   get: (k, d = "") => localStorage.getItem("piagent-" + k) ?? d,
   set: (k, v) => localStorage.setItem("piagent-" + k, v),
 };
+// 支持 #preset=<base64url(JSON {name,model,baseUrl,apiKey})> 自动配置模型（如工作站 /tools 页注入）；
+// 写入 localStorage 后立即清除 hash，防止 key 残留在地址栏/书签
+(function () {
+  const m = location.hash.match(/(?:^|#|&)preset=([A-Za-z0-9_-]+)/);
+  if (!m) return;
+  try {
+    let b64 = m[1].replace(/-/g, "+").replace(/_/g, "/");
+    b64 += "=".repeat((4 - (b64.length % 4)) % 4);
+    const p = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    if (p && p.baseUrl && p.apiKey && p.model) {
+      LS.set("baseUrl", String(p.baseUrl));
+      LS.set("apiKey", String(p.apiKey));
+      LS.set("model", String(p.model));
+      if (p.name) LS.set("presetName", String(p.name));
+    }
+  } catch { /* 解析失败忽略，退回手动填写 */ }
+  history.replaceState(null, "", location.pathname + location.search);
+})();
+
 // 恢复设置与会话
 for (const k of ["baseUrl", "apiKey", "model", "token"]) $("cfg" + k[0].toUpperCase() + k.slice(1)).value = LS.get(k);
 let sessionId = LS.get("sessionId") || crypto.randomUUID();
 LS.set("sessionId", sessionId);
 function uuid() { return crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 3) | 8).toString(16); }); }
-function modelTag() { $("modelTag").textContent = LS.get("model") ? "模型：" + LS.get("model") : "未配置模型"; }
+function modelTag() {
+  const name = LS.get("presetName");
+  $("modelTag").textContent = LS.get("model") ? "模型：" + (name ? name + "（" + LS.get("model") + "）" : LS.get("model")) : "未配置模型";
+}
 modelTag();
 
 $("cfgSave").onclick = () => {
   for (const k of ["baseUrl", "apiKey", "model", "token"]) LS.set(k, $("cfg" + k[0].toUpperCase() + k.slice(1)).value.trim());
+  localStorage.removeItem("piagent-presetName"); // 手动修改后不再显示注入的预设名
   modelTag();
   $("cfgBox").open = false;
 };

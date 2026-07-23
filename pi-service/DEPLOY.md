@@ -68,6 +68,8 @@ npm start          # 默认 127.0.0.1:39273
 
 打开 `http://127.0.0.1:39273/`，在页面右上角「⚙ 模型设置」填 Base URL / API Key / 模型 ID（存浏览器 localStorage，不离开你的电脑），即可聊天。Kimi Code 端点（api.kimi.com/coding）会自动走 Anthropic 协议，其他按 OpenAI 兼容处理。
 
+也支持 URL hash 自动配置：`http://127.0.0.1:39273/#preset=<base64url(JSON {name,model,baseUrl,apiKey})>`——页面加载时写入 localStorage 并立即清除 hash（防 key 残留地址栏）。工作站的「AI 工具」页嵌入/打开 PIAgent 本机版时会用此方式自动带入你账号里选中的模型预设（需本机 pi-service 为最新版）。
+
 **方式二：经工作站「AI 工具」页**（类 Kimi Web UI）
 
 在工作站 `/tools` 页找到「PIAgent 本机版」卡片：页面会探测你本机 39273 是否在线，点「嵌入打开」直接把上面的聊天网页嵌进工作站，或「新标签打开」。探测因浏览器私网保护可能误报离线，以实际能打开为准。
