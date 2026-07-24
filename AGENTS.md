@@ -4,137 +4,73 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-# 项目说明：个人工作站（原后台管理系统 + workbench）
+# 项目说明：个人工作站（后台管理 + workbench）
 
-本仓库为「个人工作站」，包含两套共存的功能：**用户后台管理**（用户管理）与恢复的 **workbench 个人工作台**（工作流、知识库、模型预设、提示词、自定义节点），统一在同一登录体系与同一布局下。
+两套共存功能：**用户后台管理**（用户管理）与 **workbench 个人工作台**（工作流、知识库、模型预设、提示词、自定义节点），统一登录体系与布局。
 
 ## 技术栈与命令
 
 - Next.js 16（App Router，Turbopack）+ React 19 + TypeScript + Tailwind CSS 4
-- `npm install` → `npm run dev`（开发）或 `npm run build && npm run start`（生产，端口 3000）
-- **Docker 部署（当前线上方式）**：`sudo docker compose build && sudo docker compose up -d`，两个服务——**workbench**（主应用，3000:3000，`./data:/app/data` 卷持久化 SQLite，`restart: unless-stopped`）与 **pi-service**（pi agent 独立服务，仅 compose 内网，`./data/pi-agent:/data/pi-agent` 卷）。主应用 Dockerfile 三阶段构建（deps→builder→runner），携带完整生产 node_modules 以 `npx next start` 运行；pi-service 有独立 `pi-service/Dockerfile`（npm ci 需 `allow-remote all`，npm 12 拒绝 pi 依赖链中的 remote tgz 依赖）；Docker Hub 不可达时 daemon 已配腾讯云加速器 `mirror.ccs.tencentyun.com`（/etc/docker/daemon.json）。docker 命令需 sudo（ubuntu 用户未入 docker 组）
-- `next build` 不再内嵌 lint，需单独运行 `npm run lint`
-- 存储：**SQLite 单文件数据库**（Node 内置 `node:sqlite`，零原生依赖）。数据库路径由环境变量 `DATABASE_PATH` 指定，默认项目内 `data/app.db`（data/ 已被 .gitignore 忽略）。重新部署保留数据：把 `DATABASE_PATH` 指向项目外固定目录，或随部署携带 app.db 文件
-- 旧 JSON 数据的一次性迁移在 `src/lib/db.ts`：首次连接时若 data/ 下存在旧 JSON 且对应表为空则自动导入，导入后旧文件改名为 `*.migrated.bak` 保留
+- 开发：`npm install` → `npm run dev`；生产：`npm run build && npm run start`（端口 3000）
+- **Docker 部署（当前线上方式）**：`sudo docker compose build && sudo docker compose up -d`（docker 命令需 sudo）。两个服务：**workbench**（主应用，3000:3000，`./data:/app/data` 卷持久化 SQLite）与 **pi-service**（仅 compose 内网，`./data/pi-agent:/data/pi-agent` 卷）。pi-service 的 `npm ci` 需 `allow-remote all`（npm 12 拒绝 remote tgz 依赖）
+- `next build` 不内嵌 lint，需单独 `npm run lint`
+- 存储：**SQLite 单文件**（Node 内置 `node:sqlite`），路径由 `DATABASE_PATH` 指定，默认 `data/app.db`（已 gitignore）。旧 JSON 一次性迁移在 `src/lib/db.ts`（导入后旧文件改名 `*.migrated.bak`）
 
 ## 功能与结构
 
-- 认证：登录页 + HttpOnly session cookie；首次启动自动种子创建超级管理员（凭据不记录于此，由部署者持有）
-- 注册：`/register` 公开注册页 + `POST /api/auth/register`，角色固定为普通用户 `user`，注册成功自动登录（写 session cookie）
-- 角色：`super_admin` / `user`
-- 用户管理（仅 super_admin）：按需求可查看所有用户账号及明文密码、创建/删除用户（不能删自己）、改密码/角色
-- 权限校验全部在服务端（每个页面和 Route Handler 独立校验），不依赖前端隐藏
+- 认证：登录页 + HttpOnly session cookie；`/register` 公开注册（角色固定 `user`，注册成功自动登录）；角色 `super_admin` / `user`；**权限校验全部在服务端**（每个页面和 Route Handler 独立校验）
+- 用户管理（仅 super_admin）：查看所有用户及明文密码、创建/删除（不能删自己）、改密码/角色
 
 ### workbench（所有登录用户可用）
 
-- 工作流编辑器 `/workflows`：可视化编排、运行（SSE 流式）、AI 生成工作流、自定义节点；节点间数据为 JSON 值，下游可用 `{{input.字段}}` / `{{节点名.字段}}` 引用，节点可填「输入取值」只接收上游某个字段、「输入格式」声明本节点接受的格式（供「格式转换」节点读取并自动转换）
-- 知识库 `/knowledge`：Markdown 笔记、标签、图谱、文件上传转换（doc/xmind 等走 tools/ Python 管线）
-- 模型预设 `/models`：name/model/baseUrl/apiKey，支持测试连接；点预设卡片「用量」按平台映射（`src/lib/usage-pages.ts`，Right.codes→/dashboard、DeepSeek、Kimi Code→/code/console、Kimi 开放平台）iframe 内嵌官方控制台用量页（信息比 API 全，登录态用浏览器中的官方账号）；官方页面禁止跨源嵌入，配套自研 Chrome 扩展 **`frame-embed/`**（MV3 declarativeNetRequest，仅对 deepseek/kimi/moonshot/right.codes 域的 sub_frame 响应移除 X-Frame-Options 与 CSP、为 Set-Cookie 追加 SameSite=None;Secure 保登录态，图标点击 ON/OFF 切换），经 `GET /api/frame-embed` 下载 zip（需登录），未安装扩展则「新标签打开」兜底
+- 工作流编辑器 `/workflows`：可视化编排、SSE 流式运行、AI 生成、自定义节点；节点间传 JSON 值，下游用 `{{input.字段}}` / `{{节点名.字段}}` 引用；「输入取值」只接收上游某字段、「输入格式」声明供「格式转换」节点读取转换
+- 知识库 `/knowledge`：Markdown 笔记、标签、图谱、文件上传转换（走 tools/ Python 管线）
+- 模型预设 `/models`：name/model/baseUrl/apiKey；「用量」按平台映射（`src/lib/usage-pages.ts`）iframe 内嵌官方控制台，需配套 Chrome 扩展 **`frame-embed/`**（MV3 DNR 移除 X-Frame-Options/CSP、Set-Cookie 追加 SameSite=None;Secure），经 `GET /api/frame-embed` 下载
 - 提示词 `/prompts`：分组模板管理
-- AI 工具 `/tools`：外置 AI 网页工具的统一入口（注册表 `src/lib/ai-tools.ts`，纯静态配置被客户端组件直接引用，无服务端接口；未来加 codex 等在数组追加即可）。**本机模式（类 Unity 桥接）**：工具运行在打开网页的用户自己电脑上，浏览器直连 `127.0.0.1:<port>`，不经过部署服务器——每个用户只能访问自己本机的环境，服务器上不跑共享实例。页面每 10s 用 no-cors fetch 探测本机工具是否在线（**注意**：浏览器私网访问保护 PNA 可能拦截跨源到 127.0.0.1 的探测造成 offline 误报，故探测仅供参考、不禁用按钮；iframe 加载成功才确认在线，已确认在线的不再自动重探），离线时展示启动命令（一键复制）与误报提示；支持 iframe 嵌入与新标签打开（回环模式下 kimi web 不下发 CSP，可直接嵌入）；令牌由用户在页面输入框自行填写（存浏览器 localStorage，作为 #token= 拼入 URL），服务端不持有任何工具令牌。首个接入工具 **Kimi Web UI**（`kimi web --port 5494 --keep-alive`，本机回环）。备用件：`tools/webui-proxy.mjs`（零依赖反代，剥 CSP frame-ancestors + WS 隧道）用于未来接入禁止跨源嵌入的工具，当前未运行。目前注册 web 类工具：Kimi Web UI、PIAgent 本机版（pi-service 本机部署，39273，内置聊天网页经 GET / 嵌入，见 `pi-service/DEPLOY.md`）。注册表 `modelPreset: true` 的工具（当前为 PIAgent 本机版）卡片渲染「模型预设」下拉（数据源 `GET /api/models`，当前用户预设含 apiKey，本人数据），选中后以 `#preset=<base64url(JSON {name,model,baseUrl,apiKey})>` 拼入工具 URL 自动配置——工具页面加载时写入自己的 localStorage 并立即清除 hash（hash 不随 HTTP 请求外发）；选择记忆在 localStorage `ai-tool-preset-<id>`
-- Unity 控制 `/unity`：通过本机桥接插件操控用户自己电脑上的 Unity Editor。Unity 侧把 `unity-bridge/Editor/UnityBridge.cs` 放入工程 `Assets/Editor/`，它在 127.0.0.1:39271 起极简 HTTP 服务（CORS 已处理），浏览器直接访问本机桥接口（不过部署服务器），命令经 `EditorApplication.update` 泵到 Unity 主线程执行；`UnityBridge.Register(name, desc, handler)` 可扩展自定义命令
-- 通用本机桥 `tools/local-bridge.mjs`（零依赖，用户在自己电脑运行 `node local-bridge.mjs --root <目录> [--port 39275] [--allow-write] [--allow-run]`，经 `GET /api/local-bridge` 下载）：与 Unity Bridge 同协议（`POST /execute {name,args}` → `{ok,result}`），仅监听 127.0.0.1、X-Bridge-Token 认证（启动随机生成并打印，LOCAL_BRIDGE_TOKEN 可指定）、文件操作限制在 --root 内；命令注册表 COMMANDS 可扩展：只读 fs.tree/fs.read/fs.grep/fs.readAny 默认开启，操作类 **fs.write/fs.mkdir 需 --allow-write、sys.run 需 --allow-run**（启动 flag 门控，未启用时桥返回明确提示；sys.run 以 root 为 cwd、300s 超时上限）。服务器无法直连用户本机（NAT + 浏览器沙箱），本机操作经浏览器中转（工作流 client_call 通道；/pi 聊天的 local_call 通道已随 Server-PIAgent 改为只访问服务器而移除）。要更全面、原生地操作本机，建议改用 PIAgent 本机版（pi-service 本机部署，见 `pi-service/DEPLOY.md` 与 /tools 页）
-- Server-PIAgent `/pi`（**仅超级管理员 guowenyuan**，页面/接口/侧边栏三处均校验；**只访问服务器**——浏览器中转本机桥模式已拆除）：pi CLI 封装为独立服务 **pi-service**（`pi-service/server.mjs`，零依赖 HTTP，compose 内网 39273，**不发布端口到宿主机**，`PI_SERVICE_TOKEN` 头校验兜底，token 存根目录 `.env`（已 gitignore））。主应用 `POST /api/pi/chat` 经 `src/lib/pi-runner.ts` 以 HTTP 调用 pi-service 并把其 SSE 事件透传给浏览器；pi-service 把请求中的模型预设（model/baseUrl/apiKey 由主应用从 DB 取出随请求下发）写成 pi 自定义 provider（models.json，Kimi Code 端点用 anthropic-messages、其余 openai-completions），spawn `pi --mode json --provider workbench --session-id <前端UUID>`（固定 cwd 保证 session 查找，stdin 必须 ignore 否则 pi 挂起，扩展/skills 发现开启以加载社区包，禁用 prompt-templates/themes/context-files/offline/no-approve），stdout JSONL 转 SSE（think/delta/tool_start/tool_end/done/error），5 分钟超时与客户端断开均强杀子进程；多轮连续性靠同一 sessionId（卷挂载 ./data/pi-agent:/data/pi-agent 持久化）；网页端会话列表与消息按 sessionId 存浏览器 localStorage（`pi-sessions-index` 索引 + `pi-chat-<id>` 消息，上限 30 会话/每会话 200 消息），左侧会话栏可切换/删除/新建，切页签与刷新后自动恢复最近会话（流式中禁止切换）。注意 json 模式遇模型错误不改退出码，必须检查事件里的 stopReason:"error"。pi-service 另内置聊天网页（`pi-service/public/index.html`，GET / 访问）+ 部署文档 `pi-service/DEPLOY.md`——供用户把同一服务部署到自己电脑（PIAgent 本机版，/tools 页嵌入，模型预设存浏览器 localStorage）
-- pi-service 社区包（2026-07-22 起替代自研 web_search/code_reader，后者已删除）：经 `pi install npm:<pkg>`（需 `NPM_CONFIG_ALLOW_REMOTE=all`）装入 agent 目录（`data/pi-agent/npm/`，记录于 settings.json），主 agent spawn 已**放开扩展/skills 发现**（去掉 --no-extensions/--no-skills，agent 目录我们独占控制；保留 --no-prompt-templates/--no-themes/--no-context-files/--offline/--no-approve）：**pi-mcp-adapter**（MCP 代理工具）、**pi-web-access**（web_search/fetch_content，零配置走 Exa；curator 工作流无头不可用，建议 web-search.json 设 workflow:auto-summary）、**@narumitw/pi-plan-mode**（/plan 两步法：先发命令切换再发任务）、**@narumitw/pi-goal**（/goal 自主循环，⚠️ 有实际行动能力曾自主 git commit，慎用）、**pi-subagents**（subagent 委派/并行/链式）、**pi-hermes-memory**（memory/session_search，依赖 better-sqlite3 原生模块——**必须在容器同 glibc 环境编译**（宿主编译的 .node 在 bookworm 容器报 GLIBC_2.38 缺失；用 `docker run --rm -v .../data/pi-agent:/data -w /data/npm node:24-bookworm npm rebuild better-sqlite3`））、**@juicesharp/rpiv-todo**（todo 工具）。斜杠命令在网页聊天里以发消息形式触发；TUI 依赖功能（overlay/面板/交互确认）均不可用。各包中文使用文档已入知识库（#PI 标签）
-- pi-service 子 agent 与工作流节点（**规范：每个 PIAgent 子 agent 都须注册为工作流 PIAgent 分组节点**，仅 super_admin guowenyuan 可运行——运行路由按 NODE_DEFS 的 group 自动集合拦截，新增节点自动纳入）：聊天内的子 agent 能力现由社区包 pi-subagents 提供；工作流节点「本机代码读取」（kind `pi-code-reader`，分组 **PIAgent**）为**纯读取器**：唯一配置项「文件/文件夹路径」（支持模板），执行时经 client_call（浏览器中转）调本机桥的 `fs.readAny`（文件→内容截断 50KB；目录→目录树+各文本文件内容，单文件 20KB/总 200KB/50 文件上限，二进制与超大文件跳过并列明），内容**固定输出**原样传下游（normalizeOutput 包 `{text}`）；桥地址默认 39275、令牌留空由浏览器自动复用 localStorage `local-bridge-token`（本机桥经 `GET /api/local-bridge` 下载，见上条）
-- 工作流「Unity 工具」节点（节点面板分组「外部工具」）：配置时浏览器拉取本机 Bridge 指令列表供下拉选择；**执行走浏览器中转**——引擎（服务端）遇到 unity 节点时经 SSE 下发 `client_call`，浏览器 fetch 本机 Bridge 后 POST `/api/workflows/client-result` 回传（`src/lib/client-calls.ts` 按 callId 撮合，120s 超时），服务端无需也无法访问用户本机 Unity
-- 数据隔离语义（沿用旧 workbench 设计）：**模型预设与知识库按 userId 隔离**（表内 user_id 列）；**工作流模板、提示词、自定义节点为登录用户共享**——均属个人数据，全部接口要求登录
-- 界面：浅色/深色双主题，`<html data-theme>` 驱动（localStorage `theme` 持久化，默认跟随系统；根布局内联脚本防闪烁），设计令牌（`--canvas/--card/--subtle/--fg/--muted/--line/--accent` 等 CSS 变量映射为 `bg-canvas`、`bg-card`、`text-fg`、`text-muted`、`border-line`、`bg-accent` 等 Tailwind 类）定义在 `src/app/globals.css`；新页面/组件一律使用令牌类，不要再写死 gray/neutral/white 色值
-- workbench 页面与后台管理共用 `src/app/(main)/layout.tsx` 布局与侧边栏；侧边栏按角色过滤"用户管理"
+- AI 工具 `/tools`：外置 AI 网页工具入口（纯静态注册表 `src/lib/ai-tools.ts`，客户端直接引用）。**本机模式**：工具运行在用户自己电脑，浏览器直连 `127.0.0.1:<port>` 不过服务器；令牌由用户填写存 localStorage（`#token=` 拼 URL），服务端不持有。已注册：Kimi Web UI、PIAgent 本机版（`modelPreset: true` 的工具支持预设下拉，以 `#preset=<base64url(JSON)>` 自动配置）
+- Unity 控制 `/unity`：`unity-bridge/Editor/UnityBridge.cs` 放入 Unity 工程，127.0.0.1:39271 起 HTTP 服务，浏览器直连本机桥（不过服务器）；`UnityBridge.Register()` 可扩展命令
+- 通用本机桥 `tools/local-bridge.mjs`（`GET /api/local-bridge` 下载）：用户本机运行 `node local-bridge.mjs --root <目录> [--allow-write] [--allow-run]`，仅监听 127.0.0.1、X-Bridge-Token 认证；只读 fs.tree/fs.read/fs.grep/fs.readAny 默认开启，fs.write/fs.mkdir/sys.run 需 flag 门控。**注意：桥脚本由 workbench 镜像 COPY 提供，改后需重建镜像重下载**
+- Server-PIAgent `/pi`（**仅超管 guowenyuan**，页面/接口/侧边栏三处校验；只访问服务器）：pi CLI 封装为独立服务 **pi-service**（`pi-service/server.mjs`，compose 内网 39273 不发布宿主机，`PI_SERVICE_TOKEN` 头校验）。主应用 `POST /api/pi/chat` 经 `src/lib/pi-runner.ts` 透传 SSE；pi-service spawn `pi --mode json --provider workbench --session-id <UUID>`（stdin 必须 ignore 否则挂起；**json 模式遇模型错误不改退出码，必须检查事件里 stopReason:"error"**）；多轮靠同一 sessionId（卷持久化）；网页端会话存浏览器 localStorage。pi-service 另内置聊天网页（`public/index.html`）+ `DEPLOY.md` 供用户本机部署（PIAgent 本机版）
+- pi-service 社区包：`pi install npm:<pkg>`（需 `NPM_CONFIG_ALLOW_REMOTE=all`）装入 `data/pi-agent/npm/`：pi-mcp-adapter、pi-web-access、@narumitw/pi-plan-mode、@narumitw/pi-goal（⚠️ 自主性强曾自行 git commit，慎用）、pi-subagents、pi-hermes-memory（better-sqlite3 原生模块**必须在容器同 glibc 环境编译**：`docker run --rm -v .../data/pi-agent:/data -w /data/npm node:24-bookworm npm rebuild better-sqlite3`）、@juicesharp/rpiv-todo。TUI 依赖功能（overlay/交互确认）网页端不可用；中文使用文档在知识库（#PI 标签）
+- 工作流「本机代码读取」节点（kind `pi-code-reader`，分组 **PIAgent**）：纯读取器，唯一配置「文件/文件夹路径」（支持模板），经 client_call 浏览器中转调本机桥 `fs.readAny`，内容原样传下游；令牌留空复用 localStorage `local-bridge-token`
+- 工作流「Unity 工具」节点（分组「外部工具」）：执行走浏览器中转——引擎 SSE 下发 `client_call`，浏览器调本机 Bridge 后 POST `/api/workflows/client-result` 回传（`src/lib/client-calls.ts` 撮合，120s 超时）
+- 数据隔离：**模型预设与知识库按 userId 隔离**；**工作流模板、提示词、自定义节点为登录用户共享**；全部接口要求登录
+- 界面：浅色/深色双主题，`<html data-theme>` 驱动，设计令牌（`bg-canvas`/`bg-card`/`text-fg`/`text-muted`/`border-line`/`bg-accent` 等）定义在 `src/app/globals.css`；**新页面/组件一律用令牌类，不要写死 gray/neutral/white 色值**
 
 ## 关键文件
 
-- `src/lib/db.ts` — 统一 SQLite 存储层：连接单例、幂等 DDL、旧 JSON 一次性迁移
-- `src/lib/store.ts` — users / sessions 存储（含种子逻辑）
-- `src/lib/auth.ts` — 会话校验助手
+- `src/lib/db.ts` — SQLite 存储层（连接单例、幂等 DDL、旧 JSON 迁移）
+- `src/lib/store.ts` / `auth.ts` — users/sessions 存储与会话校验
 - `src/proxy.ts` — 路由拦截（见下方 Next 16 差异）
-- `src/app/api/auth/*` — 登录 / 退出 / 当前用户 / 注册（register 公开，角色固定 user）
-- `src/app/api/users/*` — 用户管理接口（仅 super_admin）
-- `src/app/(main)/*` — 受保护页面：仪表盘、用户管理、workflows / knowledge / models / prompts / unity / tools / pi
-- `src/lib/pi-runner.ts` — pi-service HTTP 客户端（POST /chat，SSE 事件透传）
-- `pi-service/` — PIAgent 独立服务（server.mjs 零依赖 HTTP/SSE 包装 pi CLI、public/ 内置聊天网页、DEPLOY.md 本机部署文档、独立 Dockerfile 与 lockfile）
-- `tools/local-bridge.mjs` — 通用本机桥（用户本机运行，fs.tree/fs.read/fs.grep/fs.readAny 等，可扩展命令注册表；工作流节点用）
-- `src/app/api/pi/chat/*` — Server-PIAgent 对话接口（SSE，仅 guowenyuan 超管）
-- `src/app/api/local-bridge/*` — 本机桥脚本下载（需登录）
-- `src/lib/ai-tools.ts` — AI 工具注册表（/tools 页数据源，客户端直接引用，无服务端接口）
-- `tools/webui-proxy.mjs` — 本机 Web UI 反代（剥 frame-ancestors、WS 隧道），供 iframe 嵌入用
-- `src/lib/usage-pages.ts` — 各平台官方用量页映射（/models 页内嵌用，客户端安全）
-- `src/app/login/*` / `src/app/register/*` — 登录页 / 注册页（proxy 对两者放行，页内做强校验跳转）
-- `src/components/Sidebar.tsx` / `Topbar.tsx` / `ThemeToggle.tsx` — 后台布局组件与主题切换（workbench 页面复用，勿恢复旧 `components/layout/`）
-- `src/components/workflow/*` — 工作流编辑器组件
-- `src/lib/client-calls.ts` — 浏览器回调（client_call）撮合表（globalThis 单例，供 run / client-result 两个路由共享）
-- `src/lib/workflows-store.ts` / `prompts-store.ts` / `custom-nodes-store.ts` — 共享数据存储
-- `src/lib/models-store.ts` / `knowledge.ts` / `kb-import.ts` — 按 userId 隔离的存储与知识库导入
-- `src/lib/llm.ts` / `workflow-engine.ts` — LangChain 模型封装与工作流执行引擎
-- `src/app/api/{workflows,knowledge,models,prompts,custom-nodes}/*` — workbench 接口，均需登录
-- `src/app/api/unity-bridge/*` — Unity Bridge 插件源码下载（需登录）
+- `src/app/(main)/*` — 受保护页面（仪表盘、用户管理、workflows/knowledge/models/prompts/unity/tools/pi）
+- `src/lib/pi-runner.ts` + `src/app/api/pi/chat/*` — Server-PIAgent 接口（仅 guowenyuan）
+- `pi-service/` — PIAgent 独立服务（server.mjs、public/ 聊天网页、DEPLOY.md、独立 Dockerfile）
+- `tools/local-bridge.mjs` + `src/app/api/local-bridge/*` — 本机桥及下载路由
+- `src/lib/ai-tools.ts` / `usage-pages.ts` — AI 工具注册表 / 官方用量页映射
+- `src/components/{Sidebar,Topbar,ThemeToggle}.tsx`、`src/components/workflow/*` — 布局与工作流组件
+- `src/lib/client-calls.ts` — client_call 撮合表（globalThis 单例）
+- `src/lib/{workflows-store,prompts-store,custom-nodes-store}.ts` — 共享存储；`{models-store,knowledge,kb-import}.ts` — 按 userId 隔离存储
+- `src/lib/llm.ts` / `workflow-engine.ts` — LangChain 封装与工作流引擎
 
 ## Next 16 关键差异（踩过的坑）
 
-- `middleware` 已废弃，更名为 **proxy**：文件为 `src/proxy.ts`，导出 `proxy`，仅 Node runtime；文档建议只做乐观检查，真正鉴权放在页面/Handler 内（本项目即如此）。proxy 不做"已登录访问 /login 跳走"的反向重定向（避免失效 cookie 死循环），由登录页服务端强校验处理
-- Async Request APIs：`cookies()` 必须 `await`（写 cookie 也是）；动态路由 `params` 是 Promise，类型为 `{ params: Promise<{ id: string }> }`
-- eslint-config-next 16 的 `react-hooks/set-state-in-effect` 会报"effect 中同步 setState"错误：对首次挂载拉取数据的惯用法（effect 里调用 async load），目前用针对性 eslint-disable 注释处理
-- Windows 下 `TaskStop`/结束 npm 进程不会杀掉 `next start` 子进程，测试服务器需按端口 PID 手动 `taskkill`，否则下次启动 EADDRINUSE
-- `node:sqlite` 在 Node 24 免 flag 可用（有 ExperimentalWarning 属正常）；类型需 @types/node ^24
-- `next build` 的页面数据收集阶段会执行 store 模块代码：首次 build 也会触发 db.ts 的旧 JSON 迁移（迁移是幂等的一次性操作，无害，但别在 build 期间期待 data/ 保持原样）
+- `middleware` 已废弃更名为 **proxy**（`src/proxy.ts` 导出 `proxy`，仅 Node runtime）；只做乐观检查，鉴权放页面/Handler 内；不做"已登录访问 /login 跳走"的反向重定向（避免失效 cookie 死循环）
+- Async Request APIs：`cookies()` 必须 `await`；动态路由 `params` 是 Promise：`{ params: Promise<{ id: string }> }`
+- eslint `react-hooks/set-state-in-effect` 会报"effect 中同步 setState"：首次挂载拉数据的惯用法用针对性 eslint-disable 注释处理
+- `node:sqlite` 在 Node 24 免 flag 可用（ExperimentalWarning 正常）；类型需 @types/node ^24
+- `next build` 数据收集阶段会执行 store 模块代码，首次 build 也会触发 db.ts 旧 JSON 迁移（幂等无害）
+
+## 常见坑
+
+- **非安全上下文**（http://裸IP）下 `crypto.randomUUID()` 不存在，前端一律用带 Math.random 兜底的 UUID 生成（PiPanel `newSessionId()` 模式）
+- **PNA 误报**：浏览器私网访问保护可能拦截跨源到 127.0.0.1 的探测 fetch 造成 offline 误报——探测仅供参考不禁用按钮，iframe onLoad 才确认在线
+- kimi web 默认端口 58627（旧文档 5494）；连接被拒绝先核对端口
+- pi-service Dockerfile 若残留已删文件的 COPY 会 build 静默失败、容器跑旧代码
 
 ## 维护约定
 
-- **不要在本文件或任何提交中记录账号、密码、API Key 等敏感信息**（各 AI 工具的访问令牌由用户在 /tools 页自行填写并存于其浏览器 localStorage，不经过服务端）
-- 密码明文存储是客户明确需求（管理员需可见密码），属演示实现；生产化应改为哈希存储
+- **不要在本文件或任何提交中记录账号、密码、API Key 等敏感信息**
+- 密码明文存储是客户明确需求（管理员需可见密码），属演示实现
 - 改动功能时同步更新本文件的"功能与结构 / 关键文件"小节
-- **PIAgent 子 agent 规范**：给 Pi agent 加的每个子 agent 都必须同时——① 实现本体（社区包：`pi install npm:<pkg>` 装进 agent 目录即可；自研：pi-service 扩展/本机桥命令 + 中转通道）；② 在主应用注册为工作流节点（`nodeDefs.ts` 加 NodeKind + NODE_DEFS 条目，`group: "PIAgent"`；`workflow-engine.ts` 加 case）。PIAgent 分组节点仅 guowenyuan 可运行（运行路由按 group 自动拦截，无需额外改权限代码）
-- 服务器常驻进程只有本系统：**Docker 容器 workbench**（`sudo docker compose up -d`，开机/崩溃自动重启；裸机 `npx next start` 方式已弃用，部署改动=重新 build+up）；AI 工具（如 kimi web）运行在用户各自电脑，不在服务器部署
-
-## 关键改动记录
-
-- 2026-07-18：初始版本完成。替换原工作流示例应用，实现认证、用户管理、模型 API Key 管理（含管理员脱敏视图）；build / lint / curl 权限测试全部通过
-- 2026-07-18：从 583dd9b 恢复 workbench（工作流/知识库/模型预设/提示词/自定义节点），与后台管理共存于 `(main)` 布局；恢复的 API 全部迁移到新 session 认证（`getSessionUser()`，未登录 401），保留原有 userId 隔离语义；旧 wb_session 签名 cookie、scrypt 哈希、注册接口未恢复；build / lint / curl 抽查（隔离、脱敏、后台回归）通过
-- 2026-07-18：全部 JSON 存储迁移到 SQLite（新增 `src/lib/db.ts`，node:sqlite + `DATABASE_PATH` 环境变量）；知识库笔记从 .md 文件改为表存储（foam 索引改由数据库回调喂数据）；实现旧 JSON 自动一次性迁移（导入后旧文件改名 .migrated.bak）；@types/node 升到 ^24 以获得 node:sqlite 类型；真实数据迁移、重启持久化、全新空库环境均经 curl 验证通过
-- 2026-07-18：新增公开注册功能（`/register` 页 + `POST /api/auth/register`），角色固定为普通用户 `user`，注册成功自动登录；proxy 放行 `/register`，登录页加入口链接；build / lint / curl 验证（注册、重复用户名 409、自动登录、普通用户访问用户管理 403）通过
-- 2026-07-18：新增 Unity 控制功能：Unity Editor 本地桥接插件 `unity-bridge/Editor/UnityBridge.cs`（TcpListener 极简 HTTP，127.0.0.1:39271，CORS + Private Network Access 头，命令注册表 + 主线程泵，内置 log/create_cube/list_root_objects/select_object 示例）+ 网页端 `/unity` 页面（连接本机桥、命令发现与执行、执行日志）；网页只与浏览器所在机器的 127.0.0.1 通信，无新增服务端接口；lint / build / curl 冒烟（未登录 307、登录后 200）通过，Unity 侧插件需在实际 Unity 工程中验证
-- 2026-07-18：工作流新增「Unity 工具」节点（节点面板分组「外部工具」，NodeDef 新增 group 字段）：配置面板可拉取本机 Bridge 指令下拉选择、参数支持模板变量；执行采用浏览器中转（引擎 SSE 下发 client_call → 浏览器调本机 Bridge → `/api/workflows/client-result` 回传，`src/lib/client-calls.ts` 撮合）；lint / build 通过，用假 Bridge + 模拟浏览器脚本验证全链路（模板渲染、回传成功、未选指令报错）
-- 2026-07-18：修复 Unity 工具节点"切走再点回指令列表消失"：根因是指令列表存在 ConfigPanel 组件内 state，面板随节点选择卸载即丢失（已保存的选中指令本身不丢，靠"桥端未找到"兜底 option 显示）；改为模块级 `unityCmdCache` 按桥地址缓存，面板重开时立即恢复列表，state 记录桥地址归属防止多 unity 节点串列表，读取失败不再清空已有列表；jsdom 最小复现验证修复前后行为，lint / build 通过
-- 2026-07-19：工作流节点新增「输入取值」（config.inputPath）：节点可声明只接收上游数据中的某个字段（点路径，如 `name`、`items.0`、`节点名.result`），引擎在汇聚上游输出后按路径提取替换 input，取不到则该节点报错；配置面板对除开始节点外所有节点通用渲染该字段；修复 /unity 页连接失败时吞掉真实错误的问题（日志带原始错误信息）；lint / build / SSE 运行链路 curl 验证（单上游提取、多上游按节点名提取、坏路径报错）通过
-- 2026-07-19：工作流节点新增「输出格式」（config.outputFormat = mixed/single + config.outputKey）：混合为原样输出全部内容（默认），单独则把输出包装为 `{ 变量名: 内容 }` 再传下游，配合「输入取值」或 `{{input.变量名}}` 引用；配置面板对除开始/结束节点外通用渲染；LLM 节点（含自定义 llm 模式）与 Unity 节点的 JSON 解析改为宽容提取（`parseJsonText`：整体解析失败时提取首个 {...}/[...] 块再解析，解决模型包 ```json 代码块导致下游取不到字段的问题）；lint / build / SSE 运行链路 curl 验证（single 包装+下游 inputPath 提取、mixed 原样透传、围栏/说明文字包裹的 JSON 提取）通过
-- 2026-07-19：按用户要求撤掉「输出格式」（outputFormat/outputKey，不限制输出格式），改为「输入格式」声明 + 格式转换节点：每个节点（除 start）可填 config.inputFormat（本节点接受的数据格式说明/示例，纯声明不强制）；新增 convert「格式转换」节点（NodeKind + NODE_DEFS + 引擎 case）——读取下游节点的 inputFormat，选了模型则让大模型把上游输出转成该格式（专用转换提示词，只输出结果本身），不选模型则仅做 JSON 归一化透传（字符串经 parseJsonText 尝试结构化）；AI 生成工作流的系统提示词默认要求各节点填 inputFormat、llm 提示词约定输出格式（用户明确约定则以用户为准），并提示格式不一致时插入 convert 节点；lint / build / SSE 验证（大模型输出的 JSON 文本字符串 → convert 归一化 → 下游 inputPath 取到字段）通过
-- 2026-07-19：Unity 工具节点「指令参数」留空时自动使用上游输出作为参数（字符串直传，非空对象 inline 成 JSON，数字/布尔转字符串，无上游数据则空参数），填了模板则仍按模板渲染——修复"转换节点已输出参数但 Unity 指令拿到空参数报找不到物体"的断点；lint / build / SSE 验证（留空直传 S、接开始节点空参数、{{input.name}} 模板兼容）通过
-- 2026-07-19：格式转换节点兼容模型把 {"name":"值"} 输出成 name:值 纯文本的情况：输出为单行 `字段:值` 且该字段名出现在下游 inputFormat 声明中时，归一化为 JSON 对象（纯文本目标不误转）；转换提示词明确要求带字段名的目标格式必须输出合法 JSON 对象；「输入取值」取不到字段的报错附上游数据预览（前 100 字符）便于排查；lint / build / SSE 验证（name:S → {"name":"S"} → inputPath 取值、"时间: 12:00" 纯文本不误转、坏路径报错带预览）通过
-- 2026-07-19：所有节点输出统一规范为 JSON 结构（`normalizeOutput`，在 outputs.set 前统一应用）：JSON 文本解析为对象/数组，纯文本包装 `{ text }`，数字/布尔包装 `{ value }`，空值归一 `{}`；Unity 节点参数留空时自动解包 `{ text }` 字段；格式转换节点对单字段 `{ text }` 输入先解包再做 kv 归一化/模型转换（否则 kv 规则够不到被包装的文本）；配置面板「输入取值」提示补说明；lint / build / SSE 验证（文本/数字/对象包装、inputPath text、unity 解包 {text}→args "S"、{text:"name:S"}→convert→{"name":"S"}、纯文本透传）通过
-- 2026-07-20：移植 github.com/GuoWenYuan/my-llm-tool 的 api-balance-monitor 查询逻辑到 `src/lib/llm-usage.ts`（DeepSeek 余额、Kimi Code 订阅额度，按 baseUrl/apiKey 自动识别平台，不支持的平台给出明确提示），新增 `GET /api/usage`（需登录，响应不含 apiKey）；随后按用户要求移除「API Key 管理」模块（/keys 页面、/api/keys 接口、store.ts 的 Key 函数、db.ts 的 api_keys 表 DDL 与旧 JSON 迁移），Key 管理与用量显示统一收敛到「模型」页签：/api/usage 改读当前用户模型预设，/models 页每条预设卡片内嵌用量区块（provider 徽章、summary、额度进度条、明细/错误）并提供「刷新用量」；仪表盘「我的 API Key」计数改为「我的模型预设」；lint / build / curl 验证（/keys 与 /api/keys 404、/api/usage 未登录 401、真实 DeepSeek 预设查到余额 CNY 14.39、Kimi 识别与自定义 401 提示、未知平台提示）通过
-- 2026-07-20：新增「AI 工具」`/tools` 页签并接入 Kimi Web UI（kimi 0.27.0）：kimi web 以回环 127.0.0.1:5494 + --keep-alive 常驻，新增 `tools/webui-proxy.mjs`（零依赖反代：剥 CSP frame-ancestors、Host 重写防 DNS-rebinding、WebSocket 走原始 TCP 隧道）在 5495 对外转发解决跨源 iframe 禁嵌问题；`src/lib/ai-tools.ts` 工具注册表（预留 codex 等扩展）+ `GET /api/tools`（TCP 探测在线状态、读取 `~/.kimi-code/server.token` 持久令牌，仅登录用户）；/tools 页按「当前网页主机名:5495」+#token 拼 URL，默认带 workDir 深链直达工程，支持 iframe 嵌入（自动选第一个在线工具）与新标签打开；实测网络模式 CSP 仅 --host 时下发、回环模式无 CSP（代理剥离为兜底）；lint / build / curl 验证（/api/tools 未登录 401、登录返回 online+token、/tools 200、代理 HTTP 200、WS 隧道收到上游 401 即隧道通畅）通过
-- 2026-07-20：按用户反馈重构「AI 工具」为本机模式（用户仅能访问自己的环境，不能访问服务器）：停掉并移除服务器共享 kimi web 实例与 5495 代理进程，删除 `GET /api/tools`（服务端不再持有/分发 kimi server 令牌）；`src/lib/ai-tools.ts` 改为纯静态注册表（local/publicPort/tokenHash/startCommand 字段，客户端组件直接引用）；ToolsPanel 重写——浏览器每 10s no-cors 探测 127.0.0.1:5494（local 模式）判断在线，离线展示启动命令一键复制，令牌输入框存 localStorage 并以 #token= 拼入 URL，嵌入/新标签打开仅在探测在线时可用（修复旧版按钮指向服务器 5495 被防火墙拦截导致的无效点击）；tools/webui-proxy.mjs 保留为未来禁嵌工具的备用件（未运行）；lint / build / curl 验证（/api/tools 404、/tools 200）通过，本机探测与 iframe 嵌入需在用户实际浏览器环境验证
-- 2026-07-20：修复 /tools 页「本机 kimi web 已运行但仍显示未检测到、按钮全灰」：根因是浏览器私网访问保护（PNA）拦截了页面（服务器 IP 源）到 127.0.0.1 的 no-cors 探测 fetch（kimi web 不返回 PNA 许可头），而直接导航/iframe 不受限——探测 offline 系误报；改为探测仅供参考不再禁用「嵌入打开/新标签打开」，iframe onLoad 才确认在线，自动重探跳过已确认在线的工具（防状态抖动），令牌输入框改为常显，离线提示补充误报说明；lint / build 通过，3000 已重启
-- 2026-07-20：修复 /tools 页 iframe/探测 ERR_CONNECTION_REFUSED：根因是 kimi 0.27 的 `kimi web` 默认端口为 58627（旧文档为 5494），用户按默认端口运行而页面写死 5494；改为注册表默认端口 58627、启动命令 `kimi web --keep-alive`，页面新增「端口」输入框（存 localStorage `ai-tool-port-<id>`，修改即按新端口重探，iframe/新标签/探测统一使用），离线提示补充"连接被拒绝=端口无监听，核对实际端口"的排查说明；lint / build 通过，3000 已重启
-- 2026-07-20：/tools 页体验优化：注册表新增 tokenCommand 字段（kimi 为 `kimi server rotate-token`），令牌框旁展示并可一键复制；嵌入区改为带工具栏的容器（显示工具名与地址），新增最大化（fixed inset-0 全屏覆盖，Esc 或按钮还原；切换会重载 iframe，kimi web 会话在其服务端保持不丢）；lint / build 通过，3000 已重启
-- 2026-07-20：「AI 工具」接入 Codex CLI（自建极简桥方案，用户确认网页无法直接调本机命令行后选定）：新增 `tools/codex-bridge.mjs`（零依赖本机桥，127.0.0.1:39272，GET /health 探测 codex 版本、POST /exec 以 SSE 流式执行 `codex exec`（resume=true 时 `codex exec resume --last` 延续会话），CORS + Access-Control-Allow-Private-Network 头齐备，10 分钟超时、客户端断开即杀子进程、1MB 请求体上限）；注册表新增 kind（web/cli-bridge）与 bridgeDownload 字段及 codex 条目；新增 `GET /api/codex-bridge` 桥文件下载（需登录，仿 unity-bridge）；新增 `CodexChat.tsx` 内嵌聊天面板（消息流、工作目录与「延续上次会话」持久化、Enter 发送、停止按钮、SSE 缓冲解析）；ToolsPanel 按 kind 渲染 iframe 或聊天面板，cli-bridge 隐藏「新标签打开」、离线提示含下载链接；桥在服务器冒烟验证（health/preflight/SSE 错误兜底/404），lint / build 通过，3000 已重启；真实 codex 执行链路需在装了 Codex CLI 的用户本机验证
-- 2026-07-20：应用户要求把 Codex 桥泛化并更名为「本机命令行工具」：删除 codex-bridge.mjs / /api/codex-bridge / CodexChat.tsx，新增 `tools/local-cli-bridge.mjs`（执行任意 shell 命令：Windows `cmd /d /s /v:on /c`、其他 `$SHELL -c`；命令尾附 `__LCWD__` 标记行更新会话 cwd 实现 cd 持久（sh 用 `exit $__ec`、cmd 用延迟扩展 `!errorlevel!` 保留真实退出码）；/exec 强制 X-Bridge-Token 认证（随机生成或 LOCAL_CLI_BRIDGE_TOKEN 环境变量），防任意网页跨源执行本机命令）、`/api/local-cli-bridge` 下载路由、`CliPanel.tsx` 终端风面板（深色输出区、令牌框、cwd 提示符、非零退出码提示）；注册表条目 id=local-cli；桥在 Linux 冒烟验证（health/401/流式输出/cd /tmp 持久/真实退出码 2 与 0），lint / build / curl（新下载 401/200、旧 codex 路由 404）通过，3000 已重启；Windows cmd 路径未实测
-- 2026-07-20：用量展示改为内嵌官方控制台（用户认为优于 API 查询）：删除 `src/lib/llm-usage.ts` 与 `GET /api/usage`（API 用量查询整体下线，git 历史可查），新增 `src/lib/usage-pages.ts`（baseUrl/apiKey → 官方用量页映射：DeepSeek→platform.deepseek.com/usage，sk-kimi-/api.kimi.com/coding→www.kimi.com/code，moonshot→platform.kimi.com）；/models 页移除 API 用量区块与「刷新用量」，预设卡片新增「用量」按钮展开 540px iframe 内嵌官方页面（附新标签兜底与"需去除 X-Frame-Options 的 Chrome 扩展"提示）；lint / build / curl（/api/usage 404、/models 200）通过，3000 已重启；iframe 实际内嵌效果依赖用户浏览器扩展，未在服务器侧验证
-- 2026-07-20：修复「本机命令行工具显示在线但 /exec Failed to fetch」：根因多为用户本机 39272 端口跑的是旧版 codex-bridge（预检未允许 X-Bridge-Token 头导致 POST 被浏览器拦截，而 no-cors 探测能通）；桥 /health 增加 name: "local-cli-bridge" 标识，CliPanel 挂载时校验——不可达/旧版桥分别给出醒目横幅提示，连接失败文案补充旧桥可能，空态提示补充交互式 TUI 程序不可用（需非交互形式如 codex exec）；lint / build 通过，3000 已重启
-- 2026-07-20：修正 Kimi Code 官方用量页地址为 https://www.kimi.com/code/console（用户提供）；lint / build 通过，3000 已重启
-- 2026-07-20：自研 Chrome 扩展「控制台内嵌助手」（`frame-embed/`，参考用户提供的 MV3 manifest）：manifest（declarativeNetRequest + storage + action）+ rules.json（规则1仅对 deepseek.com/kimi.com/kimi.ai/moonshot.cn 的 sub_frame 移除 x-frame-options/frame-options/CSP 及 report-only；规则2为 sub_frame 的 Set-Cookie 追加 `; SameSite=None; Secure` 解决 iframe 内第三方 Cookie 登录态丢失）+ service-worker.js（图标点击切换 ruleset ON/OFF，徽章显示状态）+ README（原理/安装/注意事项）；python zipfile 打包 frame-embed.zip（仓库根目录），新增 `GET /api/frame-embed` 下载（需登录）；/models 页用量区提示改为链接下载该扩展；JSON 合法性已校验，lint / build / curl（下载 401/200 application/zip）通过，3000 已重启；扩展实际去嵌效果需在用户 Chrome 安装后验证
-- 2026-07-20：usage-pages 新增 Right.codes 映射（baseUrl 含 right.codes → https://www.right.codes/dashboard，用户提供）；frame-embed 扩展 host_permissions 与两条 DNR 规则的 requestDomains 同步加入 right.codes 并重新打包 zip（规则2 曾漏加已补）；README 域名清单同步；lint / build 通过，3000 已重启
-- 2026-07-20：「AI 工具」新增 Codex UI（第三方 GUI 方案，用户反馈 codex exec 命令行方式控制 Codex 体验不佳）：注册表新增 codex-ui 条目（web 类、local 模式、默认端口 6009 dev 前端，生产构建为 6008，页面可改端口），startCommand 为 clone+install+dev 一键复制；Vite dev 默认不下发 XFO 可直接 iframe 嵌入，若遇限制可用 frame-embed 扩展或 webui-proxy；通用本机命令行桥（local-cli）保留；lint / build 通过，3000 已重启
-- 2026-07-20：/models 页改左右主从布局（用户反馈 max-w-3xl 单栏下用量 iframe 太挤）：整页 flex 全宽充满高度，左列 w-96 可滚动（新增/编辑表单 + 紧凑预设卡片，按钮换行），右侧 flex-1 官方用量面板（选中卡片高亮描边，工具栏含预设名/provider/新标签/关闭，iframe flex-1 充满剩余高度，底部常驻扩展提示，空态为引导占位）；lg 以下断点上下堆叠；lint / build / curl（/models 200）通过，3000 已重启
-- 2026-07-20：/tools 的 Codex 方案替换（用户认为 Codex-CLI-UI 用户少且停更）：删除 codex-ui 条目，新增两个成熟方案卡片——Vibe Kanban（推荐，27k+ stars 多 Agent 编排，`npx vibe-kanban --port 3001` 避开常见 3000 冲突；注意 Bloop 公司 2026-04 关停后转社区维护、云端功能下线但本地可用）与 T3 Code（基于官方 codex app-server JSON-RPC 协议，`npx t3` 端口 3773，架构正统但早期阶段）；官方 Codex 桌面端为 Electron 无法 iframe 嵌入故排除；自研完整 Codex UI（会话/审批/diff）性价比低未采纳；lint / build 通过，3000 已重启
-- 2026-07-20：/tools 页排版优化（用户反馈上下排版工作区太小、左右排版亦不佳）：卡片区改为可收起——点「嵌入打开/打开面板」后自动收起为一行标签条（状态点+名称的 chip 可切换工具，右侧刷新/管理工具按钮），工作区占满剩余页面；展开态头部新增「收起面板」按钮；与既有全屏最大化形成两级空间调节；外圈 padding p-6→p-4；lint / build / curl（/tools 200）通过，3000 已重启
-- 2026-07-20：T3 Code 卡片描述补充 pairing token 提示（用户嵌入打开后遇到一次性配对令牌页）：token 在 npx t3 终端输出的配对链接中，直接在嵌入页输入框粘贴（第三方 iframe 存储分区，勿在新标签配对后指望嵌入页共享）；lint / build 通过，3000 已重启
-- 2026-07-20：T3 Code 配对流程优化（用户粘贴一次性 token 无效）：根因为 pairing token 一次性、点开过配对链接即被消费；注册表新增 path 字段（toolUrl 拼路径），t3-code 配置 path:"/pair" + tokenHash，卡片令牌框填入 token 后嵌入页直达 /pair#token=... 配对；描述补充一次性令牌说明（失效需重启 npx t3 拿新 token）；lint / build 通过，3000 已重启
-- 2026-07-20：/tools 移除「本机命令行工具」「Vibe Kanban」「T3 Code」（用户自行另找 Codex 方案）：注册表仅留 Kimi Web UI；删除 tools/local-cli-bridge.mjs、/api/local-cli-bridge 路由、CliPanel.tsx 及注册表 kind/bridgeDownload 字段与 ToolsPanel 中全部 cli-bridge 分支（按钮文案、条件渲染、离线下载提示）；lint / build / curl（/tools 200、/api/local-cli-bridge 404）通过，3000 已重启
-- 2026-07-20：/tools 内嵌区铺满优化（用户反馈 kimi web 内容两边被截）：收起态下嵌入区工具栏与标签条合并为一行（最大化按钮移入标签条），iframe 无边框无圆角无外边距铺满剩余区域；页面根容器去掉 p-4 改为分区自管 padding（标签条自带 px-3 py-1.5 + border-b，展开态管理与嵌入区各自加 m/p）；lint / build / curl（/tools 200）通过，3000 已重启
-- 2026-07-21：系统改名「个人工作站」+ 界面全面优化 + 浅色/深色双主题：`src/app/globals.css` 建立设计令牌体系（--canvas/--card/--subtle/--hover/--fg/--muted/--line/--accent 等 CSS 变量，@theme inline 映射为 bg-canvas/bg-card/text-fg/text-muted/border-line/bg-accent 等 Tailwind 类，@custom-variant 使 dark: 变体基于 [data-theme]）；根布局注入内联脚本按 localStorage `theme` / 系统偏好设置 data-theme 防闪烁，新增 `ThemeToggle.tsx`（顶栏太阳/月亮切换）；全部页面与工作流组件的写死 gray/neutral/white/blue 色值替换为令牌类（彩色状态徽章追加 dark: 变体），统一卡片（rounded-xl border-line bg-card shadow-sm）、输入框（focus:border-accent + ring-accent/25）、主/次按钮规范；侧边栏改图标导航 + accent 选中态，顶栏加主题切换与用户头像；tsc / lint / build 通过，3000 已重启
-- 2026-07-22：新增「Pi agent」`/pi` 页签（服务端集成，仅 guowenyuan 超管可用）：pi CLI（@earendil-works/pi-coding-agent@0.81.1）作为项目依赖安装（npm 12 需 `--allow-remote=all` 绕过 EALLOWREMOTE；全局前缀 /usr 无权限故装项目内）；新增 `src/lib/pi-runner.ts`（预设→models.json 自定义 provider、spawn `pi --mode json`、JSONL→SSE 事件转换、stdin ignore 防挂起、5 分钟超时/客户端断开强杀）、`POST /api/pi/chat`（super_admin+username 双重校验）、`/pi` 页面 + `PiPanel.tsx` 聊天面板（预设下拉、流式打字、思考过程折叠、工具调用标记、停止/新会话、sessionId 维持多轮）；侧边栏新增 username prop 按 guowenyuan 过滤入口；tsc / lint / build 通过，curl 验证（未登录 401、普通用户 403 且页面 307 跳走、侧边栏条件渲染、缺参 400）与真实链路（DeepSeek 预设流式回答、同 sessionId 多轮记忆、bash 工具调用事件）通过，3000 已重启
-- 2026-07-22：修复 /pi 页「This page couldn't load」：根因是 PiPanel 在渲染期调用 `crypto.randomUUID()`，该 API 仅安全上下文（https/localhost）可用，用户经 http://裸IP:3000 访问时为 undefined 导致客户端渲染抛错；改为 `newSessionId()` 兜底（无 randomUUID 时用 Math.random 版 UUIDv4）；lint / build 通过，3000 已重启
-- 2026-07-22：项目迁移到 Docker 部署：新装 docker.io 29.1.3 + compose v2 插件（sudo apt，docker 命令需 sudo）；新增 `Dockerfile`（node:24-bookworm-slim 三阶段：deps `npm ci`（allow-remote all 放行 pi 依赖链 remote tgz）→ builder `npm run build` → runner 携带完整 node_modules + .next + public + tools/unity-bridge/frame-embed.zip，弃用 standalone 因其追踪不含被 spawn 的 pi CLI）、`.dockerignore`、`docker-compose.yml`（3000:3000、./data:/app/data 卷、restart unless-stopped）；Docker Hub 直连超时，daemon 配腾讯云加速器 mirror.ccs.tencentyun.com 后拉取正常；停裸机 next start 由容器接管 3000，curl 验证（login 200、/pi 200、容器内 pi 真实对话流式回答、卷挂载数据完整）通过
-- 2026-07-22：Pi agent 拆分为独立服务 pi-service：新增 `pi-service/`（server.mjs 零依赖 HTTP/SSE 包装 pi CLI——models.json 生成、JSONL→SSE、stdin ignore、5 分钟超时/断开强杀，PI_SERVICE_TOKEN 头校验；独立 package.json/Dockerfile/lockfile，npm ci 需 allow-remote all）；主应用卸载 @earendil-works/pi-coding-agent 依赖（lockfile 已无 remote tgz，主 Dockerfile 去掉 allow-remote workaround），`src/lib/pi-runner.ts` 重写为 HTTP 客户端（PI_SERVICE_URL/PI_SERVICE_TOKEN 环境变量，SSE 透传，/api/pi/chat 与前端面板不变）；compose 改双服务（pi-service 不发布端口仅内网，./data/pi-agent 卷持久化会话，token 存 .env）；双镜像重建后验证（宿主机直连 39273 不可达、无 token 401、内网 health 200、登录后真实对话流式回答、同 sessionId 多轮记忆）通过
-- 2026-07-22：pi-service 新增网页搜索公共能力（作为 Tool 供所有 pi agent 调用）：新增 `pi-service/search.mjs`（零依赖 Bing HTML 抓取解析，DuckDuckGo 境内 000 不可达、cn.bing.com 200 可用；实体解码含数字实体/ensp/emsp/middot）、`pi-service/extensions/web-search.ts`（pi 扩展注册 web_search 工具，TypeBox schema，execute 返回 {content:[{text}]}，失败 throw 标 isError，8000 字符截断，spawn 加 `-e` 显式加载且与 --no-extensions 兼容——已源码确认 -e 不受其影响）、`POST /search` 接口（token 校验，与工具共用 search.mjs，供未来任何 agent HTTP 直调）；jiti 加载扩展跨后缀 import ../search.mjs 实测正常；本地与 Docker 双端验证（/search 200、模型自主调用 web_search 搜「Kimi K2.7」「DeepSeek V4」并基于实时结果作答、tool 事件 isError=false）通过，pi-service 镜像已重建上线
-- 2026-07-22：PIAgent 首个子 agent「代码读取」+ PIAgent 工作流节点分组规范确立：pi-service 新增 `subagents/code-reader.mjs`（仿官方 subagent 范例 spawn 只读子 pi——read,grep,find,ls、--no-session、专用系统提示词、CODE_ROOT 目录限制（默认 /workspace，compose `.:/workspace:ro` 只读挂载整个仓库）、50KB 截断、3 分钟超时）、`extensions/code-reader.ts`（code_reader 工具，复用 ctx.model 当前会话模型，子进程不加载扩展防递归）、`POST /agents/code-reader` 端点；主应用新增工作流节点 kind `pi-code-reader`（NODE_DEFS group "PIAgent"，预设/目录/任务 fields 自动渲染，任务留空用上游输入）+ 引擎 case（POST pi-service）+ 运行路由按 group 集合拦截（非 guowenyuan 403）；修复扩展文件两处 TS 报错（onUpdate 需 details 字段、.mjs import 不需要 ts-expect-error）；本地验证（/etc 越界与不存在目录拒绝、真实读 src/lib 答出 db.ts 职能、聊天内主 agent 委托成功）与 Docker 端到端（hejianrong 403、guowenyuan 工作流节点真实输出、容器内 /pi 聊天 code_reader 正常）通过，双镜像已重建上线
-- 2026-07-22：代码读取子 agent 从「读服务器路径」改为「读用户本机代码」（用户明确不要服务器路径；本机直读受浏览器沙箱+NAT 限制不可行，确立浏览器中转架构）：新增通用本机桥 `tools/local-bridge.mjs`（与 Unity Bridge 同 /execute 协议，127.0.0.1:39275，X-Bridge-Token 认证、--root 目录限制、fs.tree/fs.read/fs.grep、COMMANDS 可扩展注册表）+ `GET /api/local-bridge` 下载；工作流节点改为 ReAct 循环（`src/lib/local-agent.ts`，模型无关 JSON 动作协议，12 轮上限），操作经 client_call（payload 新增 token）由浏览器中转到本机桥；/pi 聊天本机模式三方中转：pi-service local-fs 扩展 → `POST /api/pi/local-op`（内网 x-pi-token）→ `src/lib/local-calls.ts` 按 sessionId 注入浏览器 SSE local_call → 浏览器调本机桥 → `/api/pi/local-result` 回传撮合；PiPanel 加本机桥状态灯/令牌框（localStorage）/下载链接与健康探测，聊天带 localBridge 标记；pi-service 注入 LOCAL_CHAT_SESSION/WORKBENCH_URL 环境变量，code_reader 按 LOCAL_CHAT_SESSION 有无自动切换本机/服务器模式；模拟浏览器脚本端到端验证（工作流节点多轮 client_call 读本机文件给出正确结论、聊天内主 agent 委托 code_reader 经 local_call 链回本机）通过，双镜像已重建上线
-- 2026-07-22：修复本机桥 Windows 盘符根目录越界误判（用户 --root E:\ 启动后子 agent 读 E:\master 被拒）：resolveSafe/resolveTarget 的越界校验 `startsWith(ROOT + path.sep)` 在 ROOT 本身以分隔符结尾时（E:\）拼出双反斜杠导致所有子目录误判越界；改为 `ROOT.endsWith(sep) ? ROOT : ROOT + sep` 前缀校验（local-bridge.mjs 与 pi-service code-reader.mjs 同模式同修）；win32 路径语义模拟复现 + Linux 回归冒烟通过；**注意桥脚本由 workbench 镜像 COPY 提供，改后需重建镜像 /api/local-bridge 才发新版**，用户需重新下载桥
-- 2026-07-22：/pi 聊天主 agent 直连本机桥执行操作（用户要"操作电脑的一些操作"不止读取）：桥 COMMANDS 新增 fs.write/fs.mkdir（--allow-write 门控）与 sys.run（--allow-run 门控，root 为 cwd、60s 默认/300s 上限超时、输出截断 50KB），未启用返回明确重启提示，/health 暴露 write/run 开关；local-fs.ts 扩为六件套并加入主 agent 的 -e 列表（主 agent 全部可用，code_reader 子 agent 经 --tools 白名单仍限只读三件套）；冒烟（写文件/执行命令/无 flag 拒绝）与模拟浏览器端到端（聊天里创建 notes/agent-test.md 并读回确认，本机文件真实落盘）通过，双镜像已重建上线
-- 2026-07-22：工作流体验优化两项：① PIAgent 本机节点「本机桥令牌」留空时自动复用 Pi agent 页面 localStorage（`local-bridge-token`）保存的令牌——WorkflowEditor 执行 client_call 时 payload.token 为空则回落读取（Unity 无 token 字段不受影响），令牌不再写入工作流 JSON，字段 placeholder 已说明；② 节点面板（NodePalette）分组可折叠（基础节点/内置分组/自定义分组均有可点击标题，chevron 旋转动画+计数，collapsed 集合存 state）+ 顶部模糊搜索框（fuzzyMatch：包含或子序列匹配 title/description/kind/group/tag，搜索时强制展开分组并隐藏空组，无匹配有空态提示）；SectionHeader 改为 render 辅助函数避开 eslint「render 中创建组件」报错；模拟浏览器验证（节点 token 留空→引擎下发空串→浏览器回退→桥接受→多轮换答正确）通过，workbench 镜像已重建上线
-- 2026-07-22：工作流「本机代码读取」节点按用户要求简化为纯读取器：唯一输入框「文件/文件夹路径」（支持模板），去掉模型预设/桥地址/令牌/调查任务字段（桥地址默认 39275、令牌走 localStorage 回退）；桥新增 `fs.readAny` 命令（文件→内容截断 50KB；目录→目录树+各文本文件内容，单文件 20KB/总 200KB/50 文件上限，二进制/超大跳过并列明），内容固定输出原样传下游；ReAct 循环 `src/lib/local-agent.ts` 随之删除（其唯一用途被取代），AGENTS.md 残留引用已清；冒烟（readAny 文件/目录）与端到端（文件→{text} 内容、文件夹→树+内容、空令牌回退）通过，workbench 镜像已重建上线
-- 2026-07-22：接入 7 个 PIAgent 社区包并移除自研 web_search/code_reader（用户选定）：`pi install`（需 NPM_CONFIG_ALLOW_REMOTE=all）装入 pi-mcp-adapter、pi-web-access、@narumitw/pi-plan-mode、@narumitw/pi-goal、pi-subagents、pi-hermes-memory、@juicesharp/rpiv-todo（data/pi-agent/npm，settings.json 记录）；server.mjs 放开扩展/skills 发现（去 --no-extensions/--no-skills）、删除自研扩展与 /search、/agents/code-reader 端点及 search.mjs/subagents/，local-fs 保留；验证 todo/subagent 委派/web 搜索/plan 两步法/memory 写入检索通过；**事故**：测试 /goal 时 goal 代理自主 `git commit`（05b8be9b，35 文件）已 `git reset --mixed HEAD~1` 撤销（工作区无损）——goal 模式自主性极强，文档已加警示；**坑1**：hermes 的 better-sqlite3 宿主编译（glibc 2.39）在 bookworm 容器（glibc 2.36）报 GLIBC_2.38 缺失致整包加载失败，容器 apt 被墙，改用完整版 node:24-bookworm 镜像挂卷重编译（npm_config_dist_url 腾讯源）修复；**坑2**：pi-service Dockerfile 残留已删 subagents 的 COPY 导致 build 静默失败、容器跑旧代码（todo"不存在"假象），已修正；7 篇中文使用文档（含无头环境注意事项）经 AgentSwarm 撰写并 POST 入知识库（#PI 标签，实测标签解析正常）；网页全链路 todo 调用终验通过
-- 2026-07-22：/pi 聊天新增命令面板（用户要求社区包命令网页端可调）：新增 `src/app/(main)/pi/pi-commands.ts`（7 个已装包全部斜杠命令注册表：plan/goal/subagents/memory/web-access/mcp/todo 分组，每条含中文用途说明，TUI 依赖项标 tuiOnly 置灰）；PiPanel 工具栏加「⌘ 命令」切换按钮，输入区上方可收起面板按分组渲染 `/cmd（中文用途）` 条目，点击填入输入框并聚焦（命令即消息发送触发），面板注明灰色项网页不可用；tsc/lint 通过，workbench 镜像已重建上线
-- 2026-07-22：Server-PIAgent 改为只访问服务器 + PIAgent 本机版方案落地：拆除聊天本机中转（删 `src/lib/local-calls.ts`、`/api/pi/local-op`、`/api/pi/local-result`，pi-runner/chat 路由/PiPanel 移除 localBridge 与桥 UI，pi-service 移除 local-fs 扩展与 LOCAL_CHAT_SESSION 注入，compose 移除 WORKBENCH_URL；工作流「本机代码读取」节点与本机桥保留）；页签/侧边栏改名 **Server-PIAgent**；pi-service 新增内置聊天网页 `public/index.html`（GET / 同源免 CORS，模型预设/令牌存 localStorage，SSE 消费含 think/工具标记，crypto.randomUUID 有兜底）使服务可脱离工作站独立使用；新增 `pi-service/DEPLOY.md`（Node≥24、npm install --allow-remote=all、7 社区包安装命令、better-sqlite3 重建、token、端口、与 Server 版对比表、FAQ）；/tools 注册表新增「PIAgent 本机版」条目（local 模式 39273，startCommand 一键复制）；tsc/lint/本地冒烟（GET / 200、/chat todo 工具）与 Docker 端到端（改名生效、聊天正常、local-op 404、/tools 条目入产物）通过，双镜像已重建上线
-- 2026-07-23：Server-PIAgent 会话保持 + PIAgent 本机版自动带入账号模型预设：① PiPanel 消息与会话索引按 sessionId 存浏览器 localStorage（`pi-sessions-index`/`pi-chat-<id>`，30 会话/200 消息上限），新增左侧会话列表（切换/删除/新建，流式中禁止切换），切页签/刷新后自动恢复最近会话——修复切页签聊天记录丢失（会话上下文本身在 pi-service 端按 sessionId 持久化，恢复后续聊不丢记忆）；② pi-service 内置聊天页支持 `#preset=<base64url(JSON {name,model,baseUrl,apiKey})>` 自动配置模型（写 localStorage 后立即 history.replaceState 清 hash，解析失败静默退回手动填写；手动保存会清除注入的预设名）；③ 注册表新增 `modelPreset` 字段（pi-agent-local 启用），ToolsPanel 拉 `/api/models` 渲染预设下拉（选择存 `ai-tool-preset-<id>`）并把选中预设拼入 iframe/新标签 URL，切换预设即重载嵌入页；hash 编解码往返（含中文 key、token 共存、异常输入）node 单测通过；tsc/lint/build 通过，双镜像已重建上线。注意：自动带入预设需用户**本机的 pi-service 更新到最新代码**（git pull 重启），旧版收到 hash 会静默忽略退回手动填写
+- **PIAgent 子 agent 规范**：每个子 agent 须同时——① 实现本体（社区包 `pi install` 或自研扩展/桥命令）；② 注册为工作流节点（`nodeDefs.ts` 加 NodeKind + NODE_DEFS 条目 `group: "PIAgent"`，`workflow-engine.ts` 加 case）。PIAgent 分组节点仅 guowenyuan 可运行（运行路由按 group 自动拦截）
+- 服务器常驻进程只有 Docker 容器（`sudo docker compose up -d`；裸机 `npx next start` 已弃用，部署改动=重新 build+up）；AI 工具运行在用户各自电脑
