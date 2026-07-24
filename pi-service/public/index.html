@@ -101,12 +101,20 @@ const LS = {
 
 // 恢复设置与会话
 for (const k of ["baseUrl", "apiKey", "model", "token"]) $("cfg" + k[0].toUpperCase() + k.slice(1)).value = LS.get(k);
-let sessionId = LS.get("sessionId") || crypto.randomUUID();
+let sessionId = LS.get("sessionId") || uuid();
 LS.set("sessionId", sessionId);
-function uuid() { return crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 3) | 8).toString(16); }); }
+function uuid() { return (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 3) | 8).toString(16); }); }
 function modelTag() {
   const name = LS.get("presetName");
-  $("modelTag").textContent = LS.get("model") ? "模型：" + (name ? name + "（" + LS.get("model") + "）" : LS.get("model")) : "未配置模型";
+  const configured = Boolean(LS.get("model"));
+  $("modelTag").textContent = configured ? "模型：" + (name ? name + "（" + LS.get("model") + "）" : LS.get("model")) : "未配置模型";
+  // 空状态文案随配置状态动态显示（配置成功仍提示"配置模型后开始对话"会误导）
+  const empty = $("empty");
+  if (empty) {
+    empty.innerHTML = configured
+      ? "模型已配置：" + esc(name || LS.get("model")) + "，在下方输入指令开始对话。<br/>所有操作都发生在<b>本机</b>（pi 直接读写本机文件、执行命令）。"
+      : "配置模型后开始对话。<br/>所有操作都发生在<b>本机</b>（pi 直接读写本机文件、执行命令）。";
+  }
 }
 modelTag();
 
