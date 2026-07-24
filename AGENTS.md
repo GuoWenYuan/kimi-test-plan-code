@@ -66,6 +66,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **PNA 误报**：浏览器私网访问保护可能拦截跨源到 127.0.0.1 的探测 fetch 造成 offline 误报——探测仅供参考不禁用按钮，iframe onLoad 才确认在线
 - kimi web 默认端口 58627（旧文档 5494）；连接被拒绝先核对端口
 - pi-service Dockerfile 若残留已删文件的 COPY 会 build 静默失败、容器跑旧代码
+- Windows 上 `node_modules/.bin/<cmd>` 是 POSIX 脚本，spawn 会 ENOENT（.cmd 新版 Node 又禁直接 spawn）——一律 `spawn(process.execPath, [<包的 cli.js 路径>, ...])` 绕开 shim
 
 ## 维护约定
 

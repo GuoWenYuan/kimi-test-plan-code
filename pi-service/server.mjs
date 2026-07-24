@@ -7,7 +7,9 @@ import path from "node:path";
 
 const PORT = Number(process.env.PORT || 39273);
 const TOKEN = process.env.PI_SERVICE_TOKEN || "";
-const PI_BIN = path.join(process.cwd(), "node_modules", ".bin", "pi");
+// 直接用 node 跑 pi 的 cli.js，不经过 node_modules/.bin shim——
+// Windows 上 .bin/pi 是 POSIX 脚本（.cmd 才可执行），spawn 会报 ENOENT
+const PI_CLI = path.join(process.cwd(), "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
 const AGENT_DIR = process.env.PI_CODING_AGENT_DIR || path.join(process.cwd(), "data", "pi-agent");
 const RUN_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -80,8 +82,9 @@ function runPi({ preset, sessionId, message }, res) {
   };
 
   const child = spawn(
-    PI_BIN,
+    process.execPath,
     [
+      PI_CLI,
       "--mode", "json",
       "--provider", "workbench",
       "--model", preset.model,
