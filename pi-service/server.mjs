@@ -69,11 +69,12 @@ function handlePiEvent(ev, send) {
 
 /**
  * 非交互执行一轮 pi 对话，stdout JSONL 转 SSE 事件。
- * 多轮连续性靠固定 cwd + --session-id（pi 按 cwd 分组存 session）。
+ * 多轮连续性靠同一 cwd + --session-id（pi 按 cwd 分组存 session）——
+ * 每个会话绑定各自的工作目录（workDir），天然按文件夹归档历史。
  * 注意 stdin 必须 "ignore"——pi 启动时会读管道 stdin 直到 end，不关流会永久挂起。
  * 本服务只访问所在机器自身（server-only），不再有浏览器中转的本机桥模式。
  */
-function runPi({ preset, sessionId, message }, res) {
+function runPi({ preset, sessionId, message, cwd }, res) {
   writeModelsJson(preset);
   const send = (e) => {
     try {
@@ -97,7 +98,7 @@ function runPi({ preset, sessionId, message }, res) {
       message,
     ],
     {
-      cwd: process.cwd(),
+      cwd: cwd || process.cwd(),
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, PI_CODING_AGENT_DIR: AGENT_DIR },
     }
@@ -174,7 +175,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (req.method === "GET" && req.url === "/health") {
-    json(res, 200, { ok: true, name: "pi-service" });
+    json(res, 200, { ok: true, name: "pi-service", cwd: process.cwd() });
     return;
   }
   if (TOKEN && req.headers["x-pi-token"] !== TOKEN) {
@@ -187,19 +188,35 @@ const server = http.createServer(async (req, res) => {
       json(res, 400, { error: "请求体不是合法 JSON" });
       return;
     }
-    const { message, sessionId, preset } = parsed;
+    const { message, sessionId, preset, workDir } = parsed;
     if (typeof message !== "string" || !message.trim()
       || typeof sessionId !== "string" || !/^[0-9a-fA-F-]{8,64}$/.test(sessionId)
       || !preset?.model || !preset?.baseUrl || !preset?.apiKey) {
       json(res, 400, { error: "message / sessionId / preset(model,baseUrl,apiKey) 均为必填" });
       return;
     }
+    // 可选 workDir：会话的工作目录（pi 按 cwd 归档 session，留空用服务启动目录）
+    let cwd = process.cwd();
+    if (workDir !== undefined && workDir !== null && String(workDir).trim() !== "") {
+      const wd = String(workDir).trim();
+      if (!path.isAbsolute(wd)) {
+        json(res, 400, { error: "workDir 必须是绝对路径：" + wd });
+        return;
+      }
+      try {
+        if (!fs.statSync(wd).isDirectory()) throw new Error();
+      } catch {
+        json(res, 400, { error: "workDir 不存在或不是目录：" + wd });
+        return;
+      }
+      cwd = wd;
+    }
     res.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     });
-    runPi({ preset, sessionId, message: message.trim() }, res);
+    runPi({ preset, sessionId, message: message.trim(), cwd }, res);
     return;
   }
   json(res, 404, { error: "not found" });

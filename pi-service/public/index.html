@@ -17,15 +17,32 @@
   header .sp { flex: 1; }
   input, textarea { background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font: inherit; }
   input:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+  input:disabled { opacity: .55; cursor: not-allowed; }
   button { border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
   button:hover { background: var(--accent-soft); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button:disabled { opacity: .5; cursor: not-allowed; }
   details.cfg { position: relative; }
   details.cfg summary { cursor: pointer; font-size: 12px; color: var(--accent); list-style: none; }
-  details.cfg .panel { position: absolute; right: 0; top: 26px; z-index: 10; width: 320px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / .15); display: grid; gap: 6px; }
+  details.cfg .panel { position: absolute; right: 0; top: 26px; z-index: 30; width: 320px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / .15); display: grid; gap: 6px; }
   details.cfg label { font-size: 11px; color: var(--muted); }
   details.cfg input { width: 100%; }
+  .app { flex: 1; display: flex; min-height: 0; position: relative; }
+  aside { width: 230px; flex-shrink: 0; border-right: 1px solid var(--line); background: var(--card); overflow-y: auto; display: flex; flex-direction: column; }
+  aside .side-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); position: sticky; top: 0; background: var(--card); }
+  aside .side-head button { padding: 1px 9px; font-size: 13px; }
+  .sgroup { padding: 4px 0; }
+  .sdir { font: 11px ui-monospace, Consolas, monospace; color: var(--muted); padding: 6px 10px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+  .sitem { display: flex; align-items: center; gap: 4px; padding: 5px 10px; cursor: pointer; font-size: 13px; }
+  .sitem:hover { background: var(--accent-soft); }
+  .sitem.on { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+  .sitem .stitle { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sitem .sdel { border: none; background: none; padding: 0 4px; color: var(--muted); font-size: 14px; line-height: 1; visibility: hidden; }
+  .sitem:hover .sdel { visibility: visible; }
+  .sitem .sdel:hover { color: #d44; }
+  .col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .wdbar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--card); font-size: 12px; color: var(--muted); }
+  .wdbar input { flex: 1; font-size: 12px; font-family: ui-monospace, Consolas, monospace; padding: 4px 8px; }
   main { flex: 1; overflow-y: auto; padding: 16px 12px; }
   .wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 12px; }
   .msg { max-width: 85%; border-radius: 12px; padding: 8px 12px; white-space: pre-wrap; word-break: break-word; }
@@ -42,10 +59,17 @@
   footer input { flex: 1; }
   .cursor { animation: blink 1s infinite; color: var(--muted); }
   @keyframes blink { 50% { opacity: 0; } }
+  #sideToggle { display: none; padding: 4px 9px; }
+  @media (max-width: 700px) {
+    #sideToggle { display: block; }
+    aside { display: none; position: absolute; left: 0; top: 0; bottom: 0; z-index: 20; width: 240px; box-shadow: 4px 0 16px rgb(0 0 0 / .2); }
+    aside.open { display: flex; }
+  }
 </style>
 </head>
 <body>
 <header>
+  <button id="sideToggle" title="会话列表">☰</button>
   <b>PIAgent 本机版</b>
   <span class="tag" id="modelTag"></span>
   <span class="sp"></span>
@@ -63,16 +87,27 @@
       <button class="primary" id="cfgSave">保存</button>
     </div>
   </details>
-  <button id="newChat">新会话</button>
 </header>
-<main id="main"><div class="wrap" id="list"><div class="empty" id="empty">配置模型后开始对话。<br/>所有操作都发生在<b>本机</b>（pi 直接读写本机文件、执行命令）。</div></div></main>
-<footer>
-  <div class="row">
-    <input id="input" placeholder="输入指令，Enter 发送…" />
-    <button class="primary" id="sendBtn">发送</button>
-    <button id="stopBtn" hidden>停止</button>
+<div class="app">
+  <aside id="side">
+    <div class="side-head"><span>会话（按目录分组）</span><button id="newChat" title="新会话">＋</button></div>
+    <div id="sessions"></div>
+  </aside>
+  <div class="col">
+    <div class="wdbar">
+      <span>📁 工作目录</span>
+      <input id="workDir" placeholder="留空 = pi-service 启动目录" />
+    </div>
+    <main id="main"><div class="wrap" id="list"></div></main>
+    <footer>
+      <div class="row">
+        <input id="input" placeholder="输入指令，Enter 发送…" />
+        <button class="primary" id="sendBtn">发送</button>
+        <button id="stopBtn" hidden>停止</button>
+      </div>
+    </footer>
   </div>
-</footer>
+</div>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
@@ -99,41 +134,185 @@ const LS = {
   history.replaceState(null, "", location.pathname + location.search);
 })();
 
-// 恢复设置与会话
+// 恢复设置
 for (const k of ["baseUrl", "apiKey", "model", "token"]) $("cfg" + k[0].toUpperCase() + k.slice(1)).value = LS.get(k);
-let sessionId = LS.get("sessionId") || uuid();
-LS.set("sessionId", sessionId);
 function uuid() { return (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 3) | 8).toString(16); }); }
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML.replace(/\n/g, "<br/>"); }
+
+// ---- 会话存储：索引 piagent-sessions [{id,workDir,title,updatedAt}] + 消息 piagent-chat-<id> ----
+// pi 服务端按 cwd 归档 session 上下文，因此每个会话绑定一个工作目录，历史按目录分组
+const MAX_SESSIONS = 30, MAX_MSGS = 200;
+function loadSessions() { try { const v = JSON.parse(localStorage.getItem("piagent-sessions") || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }
+function saveSessions() { localStorage.setItem("piagent-sessions", JSON.stringify(sessions)); }
+function loadMsgs(id) { try { const v = JSON.parse(localStorage.getItem("piagent-chat-" + id) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } }
+function saveMsgs(id) { localStorage.setItem("piagent-chat-" + id, JSON.stringify(msgs.slice(-MAX_MSGS))); }
+
+let sessions = loadSessions();
+// 旧版单会话（piagent-sessionId）迁移进索引
+const oldId = LS.get("sessionId");
+if (oldId && !sessions.some((s) => s.id === oldId)) {
+  sessions.unshift({ id: oldId, workDir: "", title: "历史会话", updatedAt: Date.now() });
+}
+localStorage.removeItem("piagent-sessionId");
+
+let serverCwd = "";
+let busy = false, ctrl = null;
+let currentId = "";
+let msgs = [];
+
+function cur() { return sessions.find((s) => s.id === currentId); }
+function newSession(workDir) {
+  const s = { id: uuid(), workDir: workDir || "", title: "新会话", updatedAt: Date.now() };
+  sessions.unshift(s);
+  while (sessions.length > MAX_SESSIONS) {
+    const old = sessions.pop();
+    localStorage.removeItem("piagent-chat-" + old.id);
+  }
+  saveSessions();
+  return s;
+}
+// 初始化当前会话：恢复上次，否则建空会话
+currentId = LS.get("current");
+if (!cur()) {
+  const s = sessions[0] || newSession("");
+  currentId = s.id;
+}
+LS.set("current", currentId);
+msgs = loadMsgs(currentId);
+
+function shortDir(d) {
+  const parts = String(d).split(/[\\/]+/).filter(Boolean);
+  return parts.length > 2 ? "…/" + parts.slice(-2).join("/") : d;
+}
+function dirLabel(dir) { return dir ? shortDir(dir) : "默认目录"; }
+function dirTitle(dir) { return dir || (serverCwd ? "默认：" + serverCwd : "pi-service 启动目录"); }
+
+function renderSidebar() {
+  const box = $("sessions");
+  box.innerHTML = "";
+  const groups = new Map();
+  for (const s of sessions) {
+    const k = s.workDir || "";
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(s);
+  }
+  const sorted = [...groups.entries()].sort((a, b) =>
+    Math.max(...b[1].map((s) => s.updatedAt)) - Math.max(...a[1].map((s) => s.updatedAt)));
+  for (const [dir, list] of sorted) {
+    const g = document.createElement("div");
+    g.className = "sgroup";
+    const h = document.createElement("div");
+    h.className = "sdir";
+    h.title = dirTitle(dir);
+    h.textContent = "📁 " + dirLabel(dir);
+    g.appendChild(h);
+    for (const s of list.sort((a, b) => b.updatedAt - a.updatedAt)) {
+      const it = document.createElement("div");
+      it.className = "sitem" + (s.id === currentId ? " on" : "");
+      const t = document.createElement("span");
+      t.className = "stitle";
+      t.textContent = s.title;
+      t.title = s.title;
+      const del = document.createElement("button");
+      del.className = "sdel";
+      del.textContent = "×";
+      del.title = "删除会话";
+      del.onclick = (e) => { e.stopPropagation(); delSession(s.id); };
+      it.appendChild(t);
+      it.appendChild(del);
+      it.onclick = () => switchTo(s.id);
+      g.appendChild(it);
+    }
+    box.appendChild(g);
+  }
+}
+
+function delSession(id) {
+  if (busy) return;
+  sessions = sessions.filter((s) => s.id !== id);
+  localStorage.removeItem("piagent-chat-" + id);
+  saveSessions();
+  if (id === currentId) {
+    const nxt = sessions[0] || newSession("");
+    currentId = nxt.id;
+    LS.set("current", currentId);
+    msgs = loadMsgs(currentId);
+    renderChat();
+  }
+  renderSidebar();
+  syncWorkDirInput();
+}
+
+function switchTo(id) {
+  if (busy || id === currentId) return; // 流式中禁止切换
+  currentId = id;
+  LS.set("current", currentId);
+  msgs = loadMsgs(id);
+  renderChat();
+  renderSidebar();
+  syncWorkDirInput();
+  $("side").classList.remove("open");
+}
+
+// 工作目录只在会话还没有消息时可改（pi 按 cwd 归档上下文，改目录=另一段上下文）
+function syncWorkDirInput() {
+  const s = cur();
+  const input = $("workDir");
+  input.value = s?.workDir || "";
+  input.disabled = busy || msgs.length > 0;
+  input.title = input.disabled && !busy
+    ? "会话已有消息，工作目录不可修改；点 ＋ 新建会话可选择其他目录"
+    : "当前会话的工作目录（绝对路径），留空用 pi-service 启动目录";
+}
+$("workDir").addEventListener("change", () => {
+  const s = cur();
+  if (!s || msgs.length > 0) { syncWorkDirInput(); return; }
+  s.workDir = $("workDir").value.trim();
+  saveSessions();
+  renderSidebar();
+  syncWorkDirInput();
+});
+
+function persist() {
+  const s = cur();
+  if (!s) return;
+  saveMsgs(s.id);
+  s.updatedAt = Date.now();
+  if (s.title === "新会话") {
+    const u = msgs.find((m) => m.role === "user");
+    if (u && u.text.trim()) s.title = u.text.trim().slice(0, 30);
+  }
+  saveSessions();
+  renderSidebar();
+}
+
+function updateEmpty() {
+  const empty = $("empty");
+  if (!empty) return;
+  const name = LS.get("presetName");
+  const configured = Boolean(LS.get("model"));
+  // 空状态文案随配置状态动态显示（配置成功仍提示"配置模型后开始对话"会误导）
+  empty.innerHTML = configured
+    ? "模型已配置：" + esc(name || LS.get("model")) + "，在下方输入指令开始对话。<br/>所有操作都发生在<b>本机</b>当前工作目录（pi 直接读写文件、执行命令）。"
+    : "配置模型后开始对话。<br/>所有操作都发生在<b>本机</b>当前工作目录（pi 直接读写文件、执行命令）。";
+}
 function modelTag() {
   const name = LS.get("presetName");
   const configured = Boolean(LS.get("model"));
   $("modelTag").textContent = configured ? "模型：" + (name ? name + "（" + LS.get("model") + "）" : LS.get("model")) : "未配置模型";
-  // 空状态文案随配置状态动态显示（配置成功仍提示"配置模型后开始对话"会误导）
-  const empty = $("empty");
-  if (empty) {
-    empty.innerHTML = configured
-      ? "模型已配置：" + esc(name || LS.get("model")) + "，在下方输入指令开始对话。<br/>所有操作都发生在<b>本机</b>（pi 直接读写本机文件、执行命令）。"
-      : "配置模型后开始对话。<br/>所有操作都发生在<b>本机</b>（pi 直接读写本机文件、执行命令）。";
-  }
+  updateEmpty();
 }
-modelTag();
 
-$("cfgSave").onclick = () => {
-  for (const k of ["baseUrl", "apiKey", "model", "token"]) LS.set(k, $("cfg" + k[0].toUpperCase() + k.slice(1)).value.trim());
-  localStorage.removeItem("piagent-presetName"); // 手动修改后不再显示注入的预设名
-  modelTag();
-  $("cfgBox").open = false;
-};
-$("newChat").onclick = () => { sessionId = uuid(); LS.set("sessionId", sessionId); $("list").innerHTML = ""; };
-
-let busy = false, ctrl = null;
 const list = $("list");
-function addMsg(role) {
+function addMsg(role, m) {
   $("empty")?.remove();
   const el = document.createElement("div");
-  el.className = "msg " + role;
+  el.className = "msg " + role + (m?.err ? " err" : "");
+  el._text = m?.text || "";
+  el._think = m?.think || "";
+  el._tools = m?.tools || [];
   list.appendChild(el);
-  el._text = ""; el._think = "";
+  render(el, false);
   return el;
 }
 function render(el, streaming) {
@@ -144,23 +323,47 @@ function render(el, streaming) {
   el.innerHTML = html;
   $("main").scrollTop = $("main").scrollHeight;
 }
-function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML.replace(/\n/g, "<br/>"); }
+function renderChat() {
+  list.innerHTML = "";
+  if (!msgs.length) {
+    const d = document.createElement("div");
+    d.className = "empty";
+    d.id = "empty";
+    list.appendChild(d);
+    updateEmpty();
+    return;
+  }
+  for (const m of msgs) addMsg(m.role, m);
+  $("main").scrollTop = $("main").scrollHeight;
+}
 
 async function send() {
   const text = $("input").value.trim();
   if (!text || busy) return;
   if (!LS.get("baseUrl") || !LS.get("apiKey") || !LS.get("model")) { alert("请先在「模型设置」里填 Base URL / API Key / 模型 ID"); $("cfgBox").open = true; return; }
+  const s = cur();
+  if (!s) return;
+  const firstExchange = msgs.length === 0;
   $("input").value = "";
-  addMsg("user").textContent = text;
-  const bot = addMsg("bot");
-  bot._tools = [];
+  const um = { role: "user", text, think: "", tools: [] };
+  msgs.push(um);
+  addMsg("user", um);
+  persist(); // 先存用户消息（首条会顺便生成会话标题）
+  const bm = { role: "bot", text: "", think: "", tools: [], err: false };
+  msgs.push(bm);
+  const bot = addMsg("bot", bm);
   setBusy(true);
   ctrl = new AbortController();
   try {
     const res = await fetch("/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(LS.get("token") ? { "x-pi-token": LS.get("token") } : {}) },
-      body: JSON.stringify({ message: text, sessionId, preset: { baseUrl: LS.get("baseUrl"), apiKey: LS.get("apiKey"), model: LS.get("model") } }),
+      body: JSON.stringify({
+        message: text,
+        sessionId: s.id,
+        ...(s.workDir ? { workDir: s.workDir } : {}),
+        preset: { baseUrl: LS.get("baseUrl"), apiKey: LS.get("apiKey"), model: LS.get("model") },
+      }),
       signal: ctrl.signal,
     });
     if (!res.ok || !res.body) {
@@ -194,6 +397,18 @@ async function send() {
     render(bot, false);
     setBusy(false);
     ctrl = null;
+    // 首轮就失败（多为工作目录填错）：回滚这两条消息，保持会话为空以便修改目录
+    if (firstExchange && bot.classList.contains("err") && !bot._text.replace(/\[错误\][\s\S]*/g, "").trim()) {
+      msgs.splice(Math.max(0, msgs.length - 2));
+      renderChat();
+      renderSidebar();
+    } else {
+      bm.text = bot._text;
+      bm.think = bot._think;
+      bm.tools = bot._tools;
+      bm.err = bot.classList.contains("err");
+      persist();
+    }
   }
 }
 function setBusy(v) {
@@ -201,10 +416,44 @@ function setBusy(v) {
   $("sendBtn").hidden = v;
   $("stopBtn").hidden = !v;
   $("sendBtn").disabled = v;
+  syncWorkDirInput();
 }
+
+$("cfgSave").onclick = () => {
+  for (const k of ["baseUrl", "apiKey", "model", "token"]) LS.set(k, $("cfg" + k[0].toUpperCase() + k.slice(1)).value.trim());
+  localStorage.removeItem("piagent-presetName"); // 手动修改后不再显示注入的预设名
+  modelTag();
+  $("cfgBox").open = false;
+};
+$("newChat").onclick = () => {
+  if (busy) return;
+  // 沿用当前目录（可编辑时以输入框为准），创建后消息为空、目录仍可修改
+  const dir = $("workDir").disabled ? (cur()?.workDir || "") : $("workDir").value.trim();
+  const s = newSession(dir);
+  currentId = s.id;
+  LS.set("current", currentId);
+  msgs = [];
+  renderChat();
+  renderSidebar();
+  syncWorkDirInput();
+  $("input").focus();
+};
+$("sideToggle").onclick = () => $("side").classList.toggle("open");
 $("sendBtn").onclick = send;
 $("stopBtn").onclick = () => ctrl?.abort();
 $("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) send(); });
+
+// 服务启动目录（/health 免 token），用于默认目录的展示
+fetch("/health").then((r) => r.json()).then((h) => {
+  serverCwd = h.cwd || "";
+  if (serverCwd) $("workDir").placeholder = "留空 = " + serverCwd;
+  renderSidebar();
+}).catch(() => {});
+
+modelTag();
+renderChat();
+renderSidebar();
+syncWorkDirInput();
 </script>
 </body>
 </html>

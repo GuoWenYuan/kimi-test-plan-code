@@ -7,7 +7,7 @@
 `pi-service` 是一个零依赖（除 pi 本身）的 Node.js 服务，把 [Pi coding agent](https://pi.dev) CLI 包装成 HTTP/SSE 接口，并自带一个聊天网页：
 
 - `GET /` — 内置聊天网页（本文档的主要使用方式）
-- `POST /chat` — 对话接口（SSE 流式，网页即调用它）
+- `POST /chat` — 对话接口（SSE 流式，网页即调用它；可选 `workDir` 指定该会话的工作目录）
 - `GET /health` — 健康检查
 
 在你电脑上运行时，pi agent 直接以**你的用户权限**读写文件、执行命令（内置 read/write/edit/bash 等工具），目录不限。
@@ -67,6 +67,8 @@ npm start          # 默认 127.0.0.1:39273
 **方式一：直接开浏览器**（最简单）
 
 打开 `http://127.0.0.1:39273/`，在页面右上角「⚙ 模型设置」填 Base URL / API Key / 模型 ID（存浏览器 localStorage，不离开你的电脑），即可聊天。Kimi Code 端点（api.kimi.com/coding）会自动走 Anthropic 协议，其他按 OpenAI 兼容处理。
+
+页面支持**多会话 + 按目录工作**：顶部「📁 工作目录」填绝对路径即让 pi 在该目录下读写/执行（留空 = 服务启动目录）；左侧会话列表按目录分组，聊天历史存浏览器 localStorage（30 会话 / 每会话 200 条上限），切换、刷新、关页都不丢。pi 的对话上下文同样按目录归档在 `data/pi-agent/sessions/`，同一会话续聊记忆不丢。会话发出首条消息后目录即锁定（改目录 = 另一段上下文），换目录点 ＋ 新建会话；首轮发送失败（多为目录填错）会自动撤回该轮，可修正后重试。
 
 也支持 URL hash 自动配置：`http://127.0.0.1:39273/#preset=<base64url(JSON {name,model,baseUrl,apiKey})>`——页面加载时写入 localStorage 并立即清除 hash（防 key 残留地址栏）。工作站的「AI 工具」页嵌入/打开 PIAgent 本机版时会用此方式自动带入你账号里选中的模型预设（需本机 pi-service 为最新版）。
 
