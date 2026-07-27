@@ -1,5 +1,6 @@
 // Pi agent 独立服务：零依赖 HTTP 服务，把 pi CLI（--mode json）包装成 SSE 接口。
-// 仅监听 compose 内网（不发布端口到宿主机）；若设了 PI_SERVICE_TOKEN 则强制校验 x-pi-token 头。
+// 仅监听本机/compose 内网（不发布端口到宿主机）；若设了 PI_SERVICE_TOKEN 则强制校验 x-pi-token 头。
+// 已放行 CORS/PNA：工作站页面的工作流「本机 PIAgent」节点可跨源直连本机 /chat。
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
@@ -163,6 +164,17 @@ function json(res, status, obj) {
 }
 
 const server = http.createServer(async (req, res) => {
+  // CORS + 私网访问（PNA）：工作流「本机 PIAgent」节点由浏览器从工作站页面跨源
+  // 直连本机 /chat，需要预检放行（写法与 tools/local-bridge.mjs 一致）
+  res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-pi-token");
+  res.setHeader("Access-Control-Allow-Private-Network", "true");
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
   if (req.method === "GET" && (req.url === "/" || req.url === "/index.html")) {
     // 内置聊天网页（本机部署时直接用浏览器打开 / 被 /tools 页 iframe 嵌入）
     try {

@@ -334,6 +334,22 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
                   </span>
                 )}
               </>
+            ) : field.type === "select" ? (
+              <select
+                value={node.data.config[field.key] ?? field.options?.[0]?.value ?? ""}
+                onChange={(e) =>
+                  onChange(node.id, {
+                    config: { ...node.data.config, [field.key]: e.target.value },
+                  })
+                }
+                className="w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
+              >
+                {(field.options ?? []).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             ) : field.multiline ? (
               <>
                 {field.key === "prompt" && (

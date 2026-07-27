@@ -1,9 +1,11 @@
 import vm from "vm";
+import crypto from "node:crypto";
 import { getPreset } from "./models-store";
 import { createChatModel } from "./llm";
 import { searchKnowledge } from "./knowledge";
 import { importToKnowledge } from "./kb-import";
 import { getCustomNode } from "./custom-nodes-store";
+import { runPiChatCollect } from "./pi-runner";
 import type { ClientCallPayload } from "./client-calls";
 import type { NodeKind } from "@/components/workflow/nodeDefs";
 
@@ -110,6 +112,17 @@ function renderTemplate(
     return value === undefined ? raw : inline(value);
   });
 }
+
+/** PIAgent 执行类节点的能力引导前缀（对应各自扩展包；通用执行为空，由 pi 自行选用工具） */
+const PI_ABILITY_PROMPTS: Partial<Record<NodeKind, string>> = {
+  "pi-web-search": "请使用网页搜索/抓取能力（web 工具）完成以下任务，联网检索并整理结果。",
+  "pi-subagent": "请委派合适的子代理（subagents）完成以下任务，汇总子代理的结论作为最终结果。",
+  "pi-mcp": "请通过 MCP 工具完成以下任务：先发现可用的 MCP 服务器与工具，再选择合适工具执行。",
+  "pi-memory":
+    "请使用持久记忆能力（hermes-memory）完成以下任务：需要时先检索已有记忆，任务中产生的关键结论按指令要求存入记忆。",
+  "pi-plan":
+    "请以只读方式对以下任务做调研与规划：不修改任何文件、不执行有副作用的命令，最终输出一份结构清晰的实施计划。",
+};
 
 function topoSort(nodes: RunNode[], edges: RunEdge[]): RunNode[] {
   const indeg = new Map<string, number>(nodes.map((n) => [n.id, 0]));
@@ -457,6 +470,76 @@ export async function runWorkflow(
             args: JSON.stringify({ path: targetPath }),
             token,
           });
+          break;
+        }
+        case "pi-agent":
+        case "pi-web-search":
+        case "pi-subagent":
+        case "pi-mcp":
+        case "pi-memory":
+        case "pi-plan": {
+          // PIAgent 执行类节点：指令驱动 pi agent（本机 = 浏览器中转到用户自己电脑的
+          // pi-service；服务器 = compose 内网 pi-service，仅 guowenyuan）。
+          // 输出按下游节点的「输入格式」声明自动适配——连线后无需格式转换节点；
+          // 执行过程（正文/思考/工具调用）实时以 node_delta 流式显示
+          const ability = PI_ABILITY_PROMPTS[kind] ?? "";
+          let message = renderTemplate(config.instruction ?? "", input, outputs, labels, knowledge);
+          if (!message.trim()) throw new Error("未填写指令");
+          // 指令未显式引用 {{input}} 时，自动附加上游数据，保证 agent 能看到
+          if (!/\{\{\s*input/.test(config.instruction ?? "")) {
+            message += `\n\n输入数据：${inline(input)}`;
+          }
+          // 读取下游节点声明的「输入格式」（同 convert 节点机制），约束最终输出
+          const targetFormat = edges
+            .filter((e) => e.source === node.id)
+            .map((e) => nodes.find((n) => n.id === e.target)?.data.config.inputFormat ?? "")
+            .map((s) => s.trim())
+            .find(Boolean) ?? "";
+          message += [
+            "",
+            "",
+            "【输出要求】",
+            targetFormat
+              ? `你的最终回复必须严格是以下格式：${targetFormat}。只输出结果本身，不要解释、不要 Markdown 代码块。`
+              : "你的最终回复只输出结果本身（结构清晰的 JSON 或纯文本），不要解释、不要 Markdown 代码块。",
+          ].join("\n");
+          if (ability) message = `${ability}\n\n${message}`;
+
+          const presetId = config.presetId;
+          if (!presetId) throw new Error("未选择模型预设，请在节点配置中选择");
+          const preset = await getPreset(userId, presetId);
+          if (!preset) throw new Error("所选模型预设不存在，可能已被删除");
+
+          const onDelta = (delta: string) => emit?.({ type: "node_delta", nodeId: node.id, delta });
+          const workDir = (config.workDir ?? "").trim();
+          let text: string;
+          if ((config.location ?? "local") === "server") {
+            // 服务器 pi-service：直跑 runPiChatCollect，delta 直接转 node_delta
+            text = await runPiChatCollect({
+              preset,
+              sessionId: crypto.randomUUID(),
+              message,
+              workDir: workDir || undefined,
+              onDelta,
+            });
+          } else {
+            // 本机 pi-service：经 client_call 由浏览器直连 127.0.0.1:39273；
+            // 执行增量由浏览器经 /api/workflows/client-progress 回传 → node_delta
+            if (!onClientCall) throw new Error("当前运行方式不支持本机 PIAgent 节点（需要浏览器页面保持打开）");
+            text = await onClientCall(node.id, node.data.label, {
+              url: "http://127.0.0.1:39273",
+              name: "pi.chat",
+              args: "",
+              kind: "pi-chat",
+              message,
+              preset: { model: preset.model, baseUrl: preset.baseUrl, apiKey: preset.apiKey },
+              token: (config.token ?? "").trim(),
+              workDir: workDir || undefined,
+              sessionId: crypto.randomUUID(),
+            });
+          }
+          // 返回文本尽量解析为 JSON，便于下游按字段取值
+          output = parseJsonText(text);
           break;
         }
         case "custom": {

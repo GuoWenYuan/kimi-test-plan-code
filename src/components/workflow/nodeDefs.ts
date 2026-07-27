@@ -10,7 +10,13 @@ export type NodeKind =
   | "condition"
   | "convert"
   | "unity"
-  | "pi-code-reader";
+  | "pi-code-reader"
+  | "pi-agent"
+  | "pi-web-search"
+  | "pi-subagent"
+  | "pi-mcp"
+  | "pi-memory"
+  | "pi-plan";
 
 export interface NodeDef {
   kind: NodeKind;
@@ -29,10 +35,43 @@ export interface NodeDef {
     label: string;
     placeholder?: string;
     multiline?: boolean;
-    /** model：渲染为模型预设下拉选择 */
-    type?: "text" | "model";
+    /** model：渲染为模型预设下拉；select：渲染为固定选项下拉 */
+    type?: "text" | "model" | "select";
+    /** type 为 select 时的固定选项 */
+    options?: { value: string; label: string }[];
   }[];
 }
+
+/** PIAgent 执行类节点的通用配置字段（指令 + 模型 + 执行位置 + 工作目录） */
+const PI_EXEC_FIELDS: NodeDef["fields"] = [
+  {
+    key: "instruction",
+    label: "指令",
+    placeholder:
+      "交给 PIAgent 的任务，可用 {{input}} / {{input.字段}} / {{节点名}} 引用上游数据；不写 {{input}} 时自动附加上游数据",
+    multiline: true,
+  },
+  { key: "presetId", label: "模型", type: "model" },
+  {
+    key: "location",
+    label: "执行位置",
+    type: "select",
+    options: [
+      { value: "local", label: "本机（浏览器直连你电脑上的 pi-service）" },
+      { value: "server", label: "服务器（仅管理员 guowenyuan 可运行）" },
+    ],
+  },
+  {
+    key: "token",
+    label: "访问令牌（可选）",
+    placeholder: "本机 pi-service 设了 PI_SERVICE_TOKEN 时填写；留空则不携带",
+  },
+  {
+    key: "workDir",
+    label: "工作目录（可选）",
+    placeholder: "绝对路径；本机执行为你电脑上的路径，留空 = pi-service 启动目录",
+  },
+];
 
 export const NODE_DEFS: Record<NodeKind, NodeDef> = {
   start: {
@@ -161,7 +200,8 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     fields: [],
   },
   // PIAgent 分组：pi-service / 本机桥的子 agent 节点（规范：所有 PIAgent 子 agent 都必须在此注册为节点；
-  // 该分组节点仅 super_admin guowenyuan 可执行，运行路由按 group 统一拦截）
+  // 运行路由按 group 统一拦截：执行位置=服务器 的节点仅 super_admin guowenyuan 可运行，
+  // 执行位置=本机（浏览器直连用户自己电脑）或无 location 配置的节点按各自规则——pi-code-reader 仍限 guowenyuan）
   "pi-code-reader": {
     kind: "pi-code-reader",
     title: "本机代码读取",
@@ -174,6 +214,68 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
       // 只需路径：文件 → 内容；文件夹 → 目录树 + 各文件内容。桥地址默认 39275、令牌自动复用 Pi agent 页保存值
       { key: "path", label: "文件/文件夹路径", placeholder: "本机桥根目录下的路径，如 src/main.ts 或 src，可用 {{input.xxx}}" },
     ],
+  },
+  // PIAgent 执行类节点：输入=指令/上游输出，输出按下游节点的「输入格式」声明自动适配（无需格式转换节点），
+  // 执行期间 pi 的 delta 实时流式显示在运行面板
+  "pi-agent": {
+    kind: "pi-agent",
+    title: "PIAgent 执行",
+    icon: "🦾",
+    description: "PIAgent：通用执行节点，一条指令驱动 pi agent 完成任意任务（读写文件/执行命令/调用全部已装扩展）",
+    color: "bg-slate-600",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
+  },
+  "pi-web-search": {
+    kind: "pi-web-search",
+    title: "PIAgent 网页搜索",
+    icon: "🔎",
+    description: "PIAgent：网页搜索/抓取（pi-web-access），联网检索并把结果整理给下游",
+    color: "bg-sky-500",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
+  },
+  "pi-subagent": {
+    kind: "pi-subagent",
+    title: "PIAgent 子代理",
+    icon: "👥",
+    description: "PIAgent：子代理委派（pi-subagents），把任务分派给 reviewer/scout 等子 agent 完成",
+    color: "bg-purple-500",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
+  },
+  "pi-mcp": {
+    kind: "pi-mcp",
+    title: "PIAgent MCP 工具",
+    icon: "🔌",
+    description: "PIAgent：MCP 工具调用（pi-mcp-adapter），按需发现并使用 .mcp.json 配置的 MCP 服务器",
+    color: "bg-amber-600",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
+  },
+  "pi-memory": {
+    kind: "pi-memory",
+    title: "PIAgent 记忆",
+    icon: "🧠",
+    description: "PIAgent：持久记忆读写（pi-hermes-memory），跨会话检索/存入结构化记忆",
+    color: "bg-lime-600",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
+  },
+  "pi-plan": {
+    kind: "pi-plan",
+    title: "PIAgent 计划",
+    icon: "🗺️",
+    description: "PIAgent：只读规划（pi-plan-mode），对任务做调研并输出实施计划，不修改任何文件",
+    color: "bg-indigo-600",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
   },
 };
 

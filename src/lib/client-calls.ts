@@ -18,12 +18,28 @@ export interface ClientCallPayload {
   args: string;
   /** 桥端令牌（本机桥需要；Unity Bridge 无令牌不传） */
   token?: string;
+  /**
+   * 调用类型：缺省 = 桥端 /execute（Unity/本机桥）；
+   * "pi-chat" = 浏览器 POST 本机 pi-service 的 /chat（SSE），逐事件经
+   * /api/workflows/client-progress 回传增量，结束后回传最终结果
+   */
+  kind?: "pi-chat";
+  /** pi-chat：发给 pi 的指令（已渲染模板、已按下游「输入格式」追加输出要求） */
+  message?: string;
+  /** pi-chat：模型预设 */
+  preset?: { model: string; baseUrl: string; apiKey: string };
+  /** pi-chat：工作目录（本机绝对路径，可选） */
+  workDir?: string;
+  /** pi-chat：会话 id（每次运行新生成 = 单轮） */
+  sessionId?: string;
 }
 
 interface Pending {
   resolve: (v: string) => void;
   reject: (e: Error) => void;
   timer: NodeJS.Timeout;
+  /** 执行过程中的增量文本（浏览器经 client-progress 回传），由运行路由转成 node_delta */
+  onProgress?: (delta: string) => void;
 }
 
 const pending: Map<string, Pending> = (() => {
@@ -33,16 +49,27 @@ const pending: Map<string, Pending> = (() => {
 })();
 
 /** 注册一次浏览器调用，返回 callId 与等待结果的 Promise（超时自动拒绝） */
-export function createClientCall(timeoutMs = 120_000): { callId: string; promise: Promise<string> } {
+export function createClientCall(
+  timeoutMs = 120_000,
+  onProgress?: (delta: string) => void
+): { callId: string; promise: Promise<string> } {
   const callId = crypto.randomUUID();
   const promise = new Promise<string>((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(callId);
       reject(new Error("等待浏览器执行超时：请确认运行页面保持打开，且本机目标服务（如 Unity Bridge）已启动"));
     }, timeoutMs);
-    pending.set(callId, { resolve, reject, timer });
+    pending.set(callId, { resolve, reject, timer, onProgress });
   });
   return { callId, promise };
+}
+
+/** 浏览器回传执行进度（增量文本）；callId 不存在返回 false */
+export function reportClientCallProgress(callId: string, delta: string): boolean {
+  const p = pending.get(callId);
+  if (!p) return false;
+  p.onProgress?.(delta);
+  return true;
 }
 
 /** 浏览器回传结果：ok=true 用 result 解决，否则用 error 拒绝；callId 不存在返回 false */

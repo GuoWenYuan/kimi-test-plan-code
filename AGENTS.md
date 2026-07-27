@@ -33,6 +33,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Server-PIAgent `/pi`（**仅超管 guowenyuan**，页面/接口/侧边栏三处校验；只访问服务器）：pi CLI 封装为独立服务 **pi-service**（`pi-service/server.mjs`，compose 内网 39273 不发布宿主机，`PI_SERVICE_TOKEN` 头校验）。主应用 `POST /api/pi/chat` 经 `src/lib/pi-runner.ts` 透传 SSE；pi-service 用 node 直跑 pi 的 `dist/cli.js` spawn `pi --mode json --provider workbench --session-id <UUID>`（stdin 必须 ignore 否则挂起；**json 模式遇模型错误不改退出码，必须检查事件里 stopReason:"error"**）；多轮靠同一 sessionId + 同一 cwd（**pi 按 cwd 归档 session 于 `sessions/--路径--/`**，卷持久化）；网页端会话存浏览器 localStorage。pi-service 另内置聊天网页（`public/index.html`，多会话按工作目录分组、历史存 localStorage；`/chat` 支持可选 `workDir` 绝对路径作为该会话 cwd，留空=服务启动目录）+ `DEPLOY.md` 供用户本机部署（PIAgent 本机版）
 - pi-service 社区包：`pi install npm:<pkg>`（需 `NPM_CONFIG_ALLOW_REMOTE=all`）装入 `data/pi-agent/npm/`：pi-mcp-adapter、pi-web-access、@narumitw/pi-plan-mode、@narumitw/pi-goal（⚠️ 自主性强曾自行 git commit，慎用）、pi-subagents、pi-hermes-memory（better-sqlite3 原生模块**必须在容器同 glibc 环境编译**：`docker run --rm -v .../data/pi-agent:/data -w /data/npm node:24-bookworm npm rebuild better-sqlite3`）、@juicesharp/rpiv-todo。TUI 依赖功能（overlay/交互确认）网页端不可用；中文使用文档在知识库（#PI 标签）
 - 工作流「本机代码读取」节点（kind `pi-code-reader`，分组 **PIAgent**）：纯读取器，唯一配置「文件/文件夹路径」（支持模板），经 client_call 浏览器中转调本机桥 `fs.readAny`，内容原样传下游；令牌留空复用 localStorage `local-bridge-token`
+- 工作流 PIAgent 执行类节点（分组 **PIAgent**，kind `pi-agent`/`pi-web-search`/`pi-subagent`/`pi-mcp`/`pi-memory`/`pi-plan`，对应 pi 社区包能力）：指令驱动 pi agent，配置「执行位置」——**本机**（client_call 浏览器直连用户自己电脑 127.0.0.1:39273 的 pi-service `/chat`，执行增量经 `POST /api/workflows/client-progress` 回传 → `node_delta` 流式显示；pi-service 已放行 CORS/PNA，用户本机副本需为最新版）或**服务器**（`runPiChatCollect` 直跑 compose 内网 pi-service）。输出按下游节点的「输入格式」声明自动拼进指令适配（无需格式转换节点）；每次运行新 sessionId = 单轮；令牌配置留空复用 localStorage `piagent-token`/`ai-tool-token-pi-agent-local`
 - 工作流「Unity 工具」节点（分组「外部工具」）：执行走浏览器中转——引擎 SSE 下发 `client_call`，浏览器调本机 Bridge 后 POST `/api/workflows/client-result` 回传（`src/lib/client-calls.ts` 撮合，120s 超时）
 - 数据隔离：**模型预设与知识库按 userId 隔离**；**工作流模板、提示词、自定义节点为登录用户共享**；全部接口要求登录
 - 界面：浅色/深色双主题，`<html data-theme>` 驱动，设计令牌（`bg-canvas`/`bg-card`/`text-fg`/`text-muted`/`border-line`/`bg-accent` 等）定义在 `src/app/globals.css`；**新页面/组件一律用令牌类，不要写死 gray/neutral/white 色值**
@@ -48,7 +49,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `tools/local-bridge.mjs` + `src/app/api/local-bridge/*` — 本机桥及下载路由
 - `src/lib/ai-tools.ts` / `usage-pages.ts` — AI 工具注册表 / 官方用量页映射
 - `src/components/{Sidebar,Topbar,ThemeToggle}.tsx`、`src/components/workflow/*` — 布局与工作流组件
-- `src/lib/client-calls.ts` — client_call 撮合表（globalThis 单例）
+- `src/lib/client-calls.ts` — client_call 撮合表（globalThis 单例，含执行增量 progress 回传撮合）
 - `src/lib/{workflows-store,prompts-store,custom-nodes-store}.ts` — 共享存储；`{models-store,knowledge,kb-import}.ts` — 按 userId 隔离存储
 - `src/lib/llm.ts` / `workflow-engine.ts` — LangChain 封装与工作流引擎
 
@@ -73,5 +74,5 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **不要在本文件或任何提交中记录账号、密码、API Key 等敏感信息**
 - 密码明文存储是客户明确需求（管理员需可见密码），属演示实现
 - 改动功能时同步更新本文件的"功能与结构 / 关键文件"小节
-- **PIAgent 子 agent 规范**：每个子 agent 须同时——① 实现本体（社区包 `pi install` 或自研扩展/桥命令）；② 注册为工作流节点（`nodeDefs.ts` 加 NodeKind + NODE_DEFS 条目 `group: "PIAgent"`，`workflow-engine.ts` 加 case）。PIAgent 分组节点仅 guowenyuan 可运行（运行路由按 group 自动拦截）
+- **PIAgent 子 agent 规范**：每个子 agent 须同时——① 实现本体（社区包 `pi install` 或自研扩展/桥命令）；② 注册为工作流节点（`nodeDefs.ts` 加 NodeKind + NODE_DEFS 条目 `group: "PIAgent"`，`workflow-engine.ts` 加 case）。PIAgent 分组节点按 group 自动拦截：**执行位置=服务器 或无 location 配置的节点仅 guowenyuan 可运行；执行位置=本机（location=local，浏览器直连用户自己电脑）对所有登录用户开放**
 - 服务器常驻进程只有 Docker 容器（`sudo docker compose up -d`；裸机 `npx next start` 已弃用，部署改动=重新 build+up）；AI 工具运行在用户各自电脑

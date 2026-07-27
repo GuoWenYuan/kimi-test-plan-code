@@ -20,8 +20,10 @@ export async function runPiChat(opts: {
   message: string;
   send: (e: PiChatEvent) => void;
   signal?: AbortSignal;
+  /** 可选工作目录（pi 按 cwd 归档 session），留空 = pi-service 启动目录 */
+  workDir?: string;
 }): Promise<void> {
-  const { preset, sessionId, message, send, signal } = opts;
+  const { preset, sessionId, message, send, signal, workDir } = opts;
   const base = (process.env.PI_SERVICE_URL ?? "http://127.0.0.1:39273").replace(/\/$/, "");
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (process.env.PI_SERVICE_TOKEN) headers["x-pi-token"] = process.env.PI_SERVICE_TOKEN;
@@ -35,6 +37,7 @@ export async function runPiChat(opts: {
         message,
         sessionId,
         preset: { model: preset.model, baseUrl: preset.baseUrl, apiKey: preset.apiKey },
+        ...(workDir ? { workDir } : {}),
       }),
       signal,
     });
@@ -75,4 +78,46 @@ export async function runPiChat(opts: {
   } catch {
     // 客户端断开（signal 触发 abort）等场景，静默结束
   }
+}
+
+/**
+ * 收集版封装：跑一次单轮 pi 对话，返回最终文本。
+ * onDelta 用于把执行过程（正文 delta、思考、工具调用标记）实时转发给调用方做流式显示；
+ * 收到 error 事件即 reject（pi --mode json 遇模型错误不改退出码，必须看事件）。
+ */
+export async function runPiChatCollect(opts: {
+  preset: ModelPreset;
+  sessionId: string;
+  message: string;
+  onDelta?: (display: string) => void;
+  signal?: AbortSignal;
+  workDir?: string;
+}): Promise<string> {
+  const { onDelta, ...rest } = opts;
+  let text = "";
+  let failed: Error | null = null;
+  await runPiChat({
+    ...rest,
+    send: (e) => {
+      switch (e.type) {
+        case "delta":
+          text += e.text;
+          onDelta?.(e.text);
+          break;
+        case "think":
+          onDelta?.(e.text);
+          break;
+        case "tool_start":
+          onDelta?.(`\n[调用工具 ${e.tool}]\n`);
+          break;
+        case "error":
+          failed = new Error(e.message);
+          break;
+        default:
+          break;
+      }
+    },
+  });
+  if (failed) throw failed;
+  return text;
 }

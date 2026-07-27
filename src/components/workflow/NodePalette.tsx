@@ -39,9 +39,11 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState("");
   const [uploading, setUploading] = useState(false);
-  // 搜索与分组折叠
+  // 搜索与分组折叠（折叠状态持久化到 localStorage）
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  /** 标记 localStorage 中的折叠状态是否已加载（加载前不回写，避免覆盖已存值） */
+  const collapsedLoaded = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const searching = query.trim().length > 0;
@@ -54,6 +56,24 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
       else next.add(key);
       return next;
     });
+
+  // 挂载时读取已保存的折叠状态（SSR/非安全上下文兜底 try/catch）
+  useEffect(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem("node-palette-collapsed") || "[]");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 首次挂载恢复本地存储的惯用法
+      if (Array.isArray(v)) setCollapsed(new Set(v));
+    } catch { /* 忽略 */ }
+    collapsedLoaded.current = true;
+  }, []);
+
+  // 折叠状态变化后持久化
+  useEffect(() => {
+    if (!collapsedLoaded.current) return;
+    try {
+      localStorage.setItem("node-palette-collapsed", JSON.stringify([...collapsed]));
+    } catch { /* 忽略 */ }
+  }, [collapsed]);
 
   /** 上传本地 skill 文件（.md/.txt），作为 llm 类自定义节点 */
   const uploadSkill = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,16 +156,28 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
     .filter(([, items]) => !searching || items.length > 0);
   const noMatch = searching && fBasic.length === 0 && fBuiltinGroups.length === 0 && fCustomGroups.length === 0;
 
+  /** 全部分组的折叠 key（基础节点 + 内置分组 + 自定义分组） */
+  const allGroupKeys = useMemo(
+    () => ["基础节点", ...builtinGroups.map(([g]) => g), ...groups.map(([g]) => `custom:${g}`)],
+    [builtinGroups, groups]
+  );
+  const allCollapsed = allGroupKeys.length > 0 && allGroupKeys.every((k) => collapsed.has(k));
+  /** 全部收起；已全部收起时则全部展开 */
+  const toggleAll = () =>
+    setCollapsed((prev) =>
+      allGroupKeys.every((k) => prev.has(k)) ? new Set() : new Set(allGroupKeys)
+    );
+
   /** 分组标题（可点击折叠/展开，搜索时强制展开）—— render 辅助函数而非组件，避免每次渲染重建组件类型 */
   const sectionHeader = (id: string, title: string, count: number) => (
     <button
       onClick={() => toggle(id)}
-      className="flex w-full items-center gap-1 px-3 pb-1 pt-3 text-left text-xs font-medium text-muted transition-colors hover:text-fg"
+      className="mt-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-semibold text-fg transition-colors hover:bg-subtle"
       title={isOpen(id) ? "点击折叠" : "点击展开"}
     >
-      <span className={`inline-block transition-transform duration-150 ${isOpen(id) ? "rotate-90" : ""}`}>▸</span>
+      <span className="w-3 shrink-0 text-center text-muted">{isOpen(id) ? "▾" : "▸"}</span>
       #{title}
-      <span className="ml-auto text-[10px]">{count}</span>
+      <span className="ml-auto rounded bg-subtle px-1.5 py-0.5 text-[10px] font-normal text-muted">{count}</span>
     </button>
   );
 
@@ -220,14 +252,28 @@ export default function NodePalette({ onAdd, onAddCustom }: Props) {
       <div className="border-b border-line px-4 py-3 text-xs font-medium text-muted">
         添加节点（点击或拖入画布）
       </div>
-      {/* 模糊搜索 */}
+      {/* 模糊搜索 + 全部展开/收起 */}
       <div className="border-b border-line p-2">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索节点（模糊匹配）"
-          className="w-full rounded-md border border-line bg-card px-2 py-1.5 text-xs text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
-        />
+        <div className="flex items-center gap-1.5">
+          <div className="relative min-w-0 flex-1">
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted">
+              🔍
+            </span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜索节点（模糊匹配）"
+              className="w-full rounded-md border border-line bg-card py-1.5 pl-7 pr-2 text-xs text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
+            />
+          </div>
+          <button
+            onClick={toggleAll}
+            className="shrink-0 rounded-md border border-line px-2 py-1.5 text-xs text-muted transition-colors hover:bg-subtle hover:text-fg"
+            title={allCollapsed ? "全部展开" : "全部收起"}
+          >
+            {allCollapsed ? "展开" : "收起"}
+          </button>
+        </div>
       </div>
       <div className="flex-1 space-y-1 overflow-y-auto p-2">
         {noMatch && <p className="px-3 py-4 text-center text-xs text-muted">无匹配节点</p>}

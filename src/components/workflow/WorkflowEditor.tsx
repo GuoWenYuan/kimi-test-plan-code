@@ -326,7 +326,17 @@ function EditorCanvas() {
         label?: string;
         delta?: string;
         callId?: string;
-        payload?: { url: string; name: string; args: string; token?: string };
+        payload?: {
+          url: string;
+          name: string;
+          args: string;
+          token?: string;
+          kind?: "pi-chat";
+          message?: string;
+          preset?: { model: string; baseUrl: string; apiKey: string };
+          workDir?: string;
+          sessionId?: string;
+        };
         result?: { status: NodeStatus; output?: string; error?: string };
         results?: Record<string, NodeStatus>;
         finalOutput?: string;
@@ -350,37 +360,119 @@ function EditorCanvas() {
             return next;
           });
         } else if (e.type === "client_call" && e.callId && e.payload) {
-          // 引擎请求浏览器代为调用本机服务（如 Unity Bridge），执行后回传结果
+          // 引擎请求浏览器代为调用本机服务（Unity Bridge / 本机 pi-service 等），执行后回传结果
           const { callId, payload } = e;
           void (async () => {
             let ok = true;
             let result = "";
             let error = "";
-            try {
-              // 桥令牌：节点配置优先；配置留空（PIAgent 本机节点）则复用 Pi agent 页面保存的令牌，避免重复填写
-              const bridgeToken =
-                payload.token !== undefined
-                  ? payload.token || localStorage.getItem("local-bridge-token") || ""
-                  : "";
-              const r = await fetch(`${payload.url}/execute`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  ...(bridgeToken ? { "X-Bridge-Token": bridgeToken } : {}),
-                },
-                body: JSON.stringify({ name: payload.name, args: payload.args }),
-              });
-              const data = await r.json().catch(() => null);
-              if (r.ok && data?.ok) {
-                result = typeof data.result === "string" ? data.result : JSON.stringify(data.result ?? "");
-              } else {
+            // 增量回传（运行面板流式显示）：串行队列保证顺序，结果回传前先 flush
+            let progressQueue: Promise<unknown> = Promise.resolve();
+            const progress = (delta: string) => {
+              progressQueue = progressQueue.then(() =>
+                fetch("/api/workflows/client-progress", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ callId, delta }),
+                })
+              ).catch(() => {});
+            };
+            if (payload.kind === "pi-chat") {
+              // 本机 PIAgent 节点：浏览器直连用户自己电脑的 pi-service /chat（SSE），
+              // 逐事件经 client-progress 回传增量，结束后回传最终文本
+              try {
+                // 令牌：节点配置优先；留空则复用浏览器里可能存在的本机版令牌
+                const token =
+                  payload.token !== undefined
+                    ? payload.token ||
+                      localStorage.getItem("piagent-token") ||
+                      localStorage.getItem("ai-tool-token-pi-agent-local") ||
+                      ""
+                    : "";
+                const r = await fetch(`${payload.url}/chat`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { "x-pi-token": token } : {}),
+                  },
+                  body: JSON.stringify({
+                    message: payload.message ?? "",
+                    sessionId: payload.sessionId,
+                    preset: payload.preset,
+                    ...(payload.workDir ? { workDir: payload.workDir } : {}),
+                  }),
+                });
+                if (!r.ok || !r.body) {
+                  const data = await r.json().catch(() => null);
+                  ok = false;
+                  error = data?.error ?? `HTTP ${r.status}`;
+                } else {
+                  const reader = r.body.getReader();
+                  const decoder = new TextDecoder();
+                  let buf = "";
+                  for (;;) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buf += decoder.decode(value, { stream: true });
+                    const chunks = buf.split("\n\n");
+                    buf = chunks.pop() ?? "";
+                    for (const chunk of chunks) {
+                      const line = chunk.trim();
+                      if (!line.startsWith("data:")) continue;
+                      let ev: { type?: string; text?: string; tool?: string; message?: string };
+                      try {
+                        ev = JSON.parse(line.slice(5));
+                      } catch {
+                        continue;
+                      }
+                      // pi --mode json 遇模型错误不改退出码，必须检查 error 事件
+                      if (ev.type === "delta" && ev.text) {
+                        result += ev.text;
+                        progress(ev.text);
+                      } else if (ev.type === "think" && ev.text) {
+                        progress(ev.text);
+                      } else if (ev.type === "tool_start" && ev.tool) {
+                        progress(`\n[调用工具 ${ev.tool}]\n`);
+                      } else if (ev.type === "error") {
+                        ok = false;
+                        error = ev.message ?? "pi 执行出错";
+                      }
+                    }
+                  }
+                }
+              } catch (err) {
                 ok = false;
-                error = data?.error ?? `HTTP ${r.status}`;
+                error = `无法连接 ${payload.url}：请确认本机 pi-service 已启动（可在「AI 工具」页 PIAgent 本机版卡片探测），且为支持跨域的最新版`;
+                if (err instanceof Error && err.message) error += `（${err.message}）`;
               }
-            } catch (err) {
-              ok = false;
-              error = `无法连接 ${payload.url}：请确认本机 Unity Editor 已打开且 Unity Bridge 已启动`;
-              if (err instanceof Error && err.message) error += `（${err.message}）`;
+              await progressQueue;
+            } else {
+              try {
+                // 桥令牌：节点配置优先；配置留空（PIAgent 本机节点）则复用 Pi agent 页面保存的令牌，避免重复填写
+                const bridgeToken =
+                  payload.token !== undefined
+                    ? payload.token || localStorage.getItem("local-bridge-token") || ""
+                    : "";
+                const r = await fetch(`${payload.url}/execute`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    ...(bridgeToken ? { "X-Bridge-Token": bridgeToken } : {}),
+                  },
+                  body: JSON.stringify({ name: payload.name, args: payload.args }),
+                });
+                const data = await r.json().catch(() => null);
+                if (r.ok && data?.ok) {
+                  result = typeof data.result === "string" ? data.result : JSON.stringify(data.result ?? "");
+                } else {
+                  ok = false;
+                  error = data?.error ?? `HTTP ${r.status}`;
+                }
+              } catch (err) {
+                ok = false;
+                error = `无法连接 ${payload.url}：请确认本机目标服务已启动（Unity Bridge / 本机桥，视节点而定）`;
+                if (err instanceof Error && err.message) error += `（${err.message}）`;
+              }
             }
             await fetch("/api/workflows/client-result", {
               method: "POST",
