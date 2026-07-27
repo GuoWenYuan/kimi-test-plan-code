@@ -23,7 +23,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ### workbench（所有登录用户可用）
 
-- 工作流编辑器 `/workflows`：可视化编排、SSE 流式运行、AI 生成、自定义节点；节点间传 JSON 值，下游用 `{{input.字段}}` / `{{节点名.字段}}` 引用；「输入取值」只接收上游某字段、「输入格式」声明供「格式转换」节点读取转换
+- 工作流编辑器 `/workflows`：可视化编排、SSE 流式运行、AI 生成、自定义节点；节点间传 JSON 值，下游用 `{{input.字段}}` / `{{节点名.字段}}` 引用；「输入取值」/「输入格式」配置仅「外部工具」分组节点（Unity）在面板展示（「输入格式」供「格式转换」节点和上游 PIAgent 节点读取适配；引擎仍兼容旧工作流里已保存的配置）
 - 知识库 `/knowledge`：Markdown 笔记、标签、图谱、文件上传转换（走 tools/ Python 管线）
 - 模型预设 `/models`：name/model/baseUrl/apiKey；「用量」按平台映射（`src/lib/usage-pages.ts`）iframe 内嵌官方控制台，需配套 Chrome 扩展 **`frame-embed/`**（MV3 DNR 移除 X-Frame-Options/CSP、Set-Cookie 追加 SameSite=None;Secure），经 `GET /api/frame-embed` 下载
 - 提示词 `/prompts`：分组模板管理

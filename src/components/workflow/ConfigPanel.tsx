@@ -75,6 +75,10 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
 
   if (!node) return null;
   const def = NODE_DEFS[node.data.kind];
+  // 「输入取值」「输入格式」仅「外部工具」分组节点保留（Unity 靠输入格式声明给格式转换节点用）；
+  // 其余节点不再展示：PIAgent 节点输出已按下游自动适配，其他节点用 {{input}} 模板引用上游即可。
+  // 引擎仍兼容已保存的 inputPath/inputFormat 配置，旧工作流不受影响
+  const showIoDecl = def.group === "外部工具";
   const customDef =
     node.data.kind === "custom"
       ? customDefs.find((d) => d.id === node.data.config.customId)
@@ -153,7 +157,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
           />
         </label>
 
-        {node.data.kind !== "start" && (
+        {showIoDecl && (
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-muted">
               输入取值（可选）
@@ -175,7 +179,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
           </label>
         )}
 
-        {node.data.kind !== "start" && (
+        {showIoDecl && (
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-muted">
               输入格式（可选）
@@ -192,7 +196,7 @@ export default function ConfigPanel({ node, onChange, onDelete, onClose }: Props
               className="w-full resize-y rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
             />
             <span className="mt-1 block text-xs text-muted">
-              声明本节点接受什么格式；上游接「格式转换」节点时会读取此声明自动转换。
+              声明本节点接受什么格式；上游接「格式转换」或 PIAgent 节点时会读取此声明自动适配输出。
             </span>
           </label>
         )}
