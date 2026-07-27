@@ -13,7 +13,14 @@ export type NodeKind =
   | "pi-code-reader"
   | "pi-agent"
   | "pi-web-search"
-  | "pi-subagent"
+  | "pi-sub-reviewer"
+  | "pi-sub-scout"
+  | "pi-sub-researcher"
+  | "pi-sub-planner"
+  | "pi-sub-oracle"
+  | "pi-sub-worker"
+  | "pi-sub-context-builder"
+  | "pi-sub-delegate"
   | "pi-mcp"
   | "pi-memory"
   | "pi-plan";
@@ -237,12 +244,83 @@ export const NODE_DEFS: Record<NodeKind, NodeDef> = {
     group: "PIAgent",
     fields: PI_EXEC_FIELDS,
   },
-  "pi-subagent": {
-    kind: "pi-subagent",
-    title: "PIAgent 子代理",
-    icon: "👥",
-    description: "PIAgent：子代理委派（pi-subagents），把任务分派给 reviewer/scout 等子 agent 完成",
-    color: "bg-purple-500",
+  // pi-subagents 子代理：每个子代理一个独立节点，指令即委派给该子代理的任务
+  "pi-sub-reviewer": {
+    kind: "pi-sub-reviewer",
+    title: "PIAgent 评审",
+    icon: "🧐",
+    description: "PIAgent：reviewer 子代理——代码 diff / 计划 / 方案评审，带证据输出结论",
+    color: "bg-rose-600",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
+  },
+  "pi-sub-scout": {
+    kind: "pi-sub-scout",
+    title: "PIAgent 侦察",
+    icon: "🛰️",
+    description: "PIAgent：scout 子代理——快速代码库侦察，返回压缩上下文供下游使用",
+    color: "bg-teal-600",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
+  },
+  "pi-sub-researcher": {
+    kind: "pi-sub-researcher",
+    title: "PIAgent 研究员",
+    icon: "🔬",
+    description: "PIAgent：researcher 子代理——自主联网检索、评估并综合成研究简报",
+    color: "bg-cyan-600",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
+  },
+  "pi-sub-planner": {
+    kind: "pi-sub-planner",
+    title: "PIAgent 规划",
+    icon: "📐",
+    description: "PIAgent：planner 子代理——把需求与代码上下文转成具体实施计划",
+    color: "bg-indigo-500",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
+  },
+  "pi-sub-oracle": {
+    kind: "pi-sub-oracle",
+    title: "PIAgent 裁决",
+    icon: "🔮",
+    description: "PIAgent：oracle 子代理——高上下文决策一致性审查，发现漂移与隐藏矛盾",
+    color: "bg-violet-600",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
+  },
+  "pi-sub-worker": {
+    kind: "pi-sub-worker",
+    title: "PIAgent 执行者",
+    icon: "👷",
+    description: "PIAgent：worker 子代理——按上下文与计划落地实施任务",
+    color: "bg-orange-600",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
+  },
+  "pi-sub-context-builder": {
+    kind: "pi-sub-context-builder",
+    title: "PIAgent 上下文构建",
+    icon: "🧱",
+    description: "PIAgent：context-builder 子代理——分析需求与代码库，生成结构化上下文交接材料",
+    color: "bg-stone-600",
+    creatable: true,
+    group: "PIAgent",
+    fields: PI_EXEC_FIELDS,
+  },
+  "pi-sub-delegate": {
+    kind: "pi-sub-delegate",
+    title: "PIAgent 委派",
+    icon: "📨",
+    description: "PIAgent：delegate 子代理——轻量通用委派代理，行为接近主会话",
+    color: "bg-emerald-600",
     creatable: true,
     group: "PIAgent",
     fields: PI_EXEC_FIELDS,

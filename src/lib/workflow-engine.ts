@@ -113,10 +113,21 @@ function renderTemplate(
   });
 }
 
-/** PIAgent 执行类节点的能力引导前缀（对应各自扩展包；通用执行为空，由 pi 自行选用工具） */
+/** 生成「委派给指定子代理」的能力引导前缀（pi-subagents 扩展，pi 经 subagent 工具按名委派） */
+const subAgent = (name: string) =>
+  `请调用 subagent 工具，把以下任务委派给「${name}」子代理执行（不要自己完成）；子代理返回后，把它的结果整理为最终结果。`;
+
+/** PIAgent 执行类节点的能力引导前缀（对应各自扩展包/子代理；通用执行为空，由 pi 自行选用工具） */
 const PI_ABILITY_PROMPTS: Partial<Record<NodeKind, string>> = {
   "pi-web-search": "请使用网页搜索/抓取能力（web 工具）完成以下任务，联网检索并整理结果。",
-  "pi-subagent": "请委派合适的子代理（subagents）完成以下任务，汇总子代理的结论作为最终结果。",
+  "pi-sub-reviewer": subAgent("reviewer"),
+  "pi-sub-scout": subAgent("scout"),
+  "pi-sub-researcher": subAgent("researcher"),
+  "pi-sub-planner": subAgent("planner"),
+  "pi-sub-oracle": subAgent("oracle"),
+  "pi-sub-worker": subAgent("worker"),
+  "pi-sub-context-builder": subAgent("context-builder"),
+  "pi-sub-delegate": subAgent("delegate"),
   "pi-mcp": "请通过 MCP 工具完成以下任务：先发现可用的 MCP 服务器与工具，再选择合适工具执行。",
   "pi-memory":
     "请使用持久记忆能力（hermes-memory）完成以下任务：需要时先检索已有记忆，任务中产生的关键结论按指令要求存入记忆。",
@@ -474,7 +485,14 @@ export async function runWorkflow(
         }
         case "pi-agent":
         case "pi-web-search":
-        case "pi-subagent":
+        case "pi-sub-reviewer":
+        case "pi-sub-scout":
+        case "pi-sub-researcher":
+        case "pi-sub-planner":
+        case "pi-sub-oracle":
+        case "pi-sub-worker":
+        case "pi-sub-context-builder":
+        case "pi-sub-delegate":
         case "pi-mcp":
         case "pi-memory":
         case "pi-plan": {

@@ -9,11 +9,15 @@ const PIAGENT_KINDS = new Set(
 );
 
 /**
- * 带「执行位置」配置的 PIAgent 执行类节点：
+ * 带「执行位置」配置的 PIAgent 执行类节点（fields 含 location，新增节点自动纳入）：
  * 选服务器执行才要求 guowenyuan；本机执行 = 浏览器直连用户自己电脑的 pi-service
  * （与 local-bridge 同一安全模型，令牌用户自持），对所有登录用户开放
  */
-const PI_EXEC_KINDS = new Set(["pi-agent", "pi-web-search", "pi-subagent", "pi-mcp", "pi-memory", "pi-plan"]);
+const PI_EXEC_KINDS = new Set(
+  Object.values(NODE_DEFS)
+    .filter((d) => d.fields.some((f) => f.key === "location"))
+    .map((d) => d.kind)
+);
 
 /** 该节点是否需要服务器侧 pi 权限（仅 guowenyuan） */
 function needsServerPi(n: RunNode): boolean {
