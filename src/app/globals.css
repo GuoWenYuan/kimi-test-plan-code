@@ -3,34 +3,64 @@
 /* 深色主题以 data-theme 属性驱动（class 策略），dark: 变体可用 */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/* ============================================================
+   青屿晨光 · Morning Teal
+   浅色为第一公民：清晨青白底 + 青绿主色 + 少量暖橙点缀，干净克制
+   深色主题为「暮色港湾」：低对比柔和深青灰（非纯黑）
+   ============================================================ */
+
 :root {
-  --canvas: #f4f6f9;
+  --canvas: #f4faf8;
   --card: #ffffff;
-  --subtle: #f1f3f7;
-  --hover: #e9edf3;
-  --fg: #171c26;
-  --muted: #5d6679;
-  --line: #e3e7ee;
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
-  --accent-soft: #eef0fe;
+  --subtle: #edf5f2;
+  --hover: #e0efea;
+  --fg: #16302c;
+  --muted: #5c7770;
+  --line: #d9e7e2;
+  --accent: #0d9488;
+  --accent-hover: #0f766e;
+  --accent-soft: rgb(13 148 136 / 0.1);
+  /* 暖橙仅用于小面积点缀（角标、强调数字等） */
+  --accent-2: #ea580c;
+  /* 装饰渐变：青绿同色系两阶，安静不刺眼 */
+  --accent-grad: linear-gradient(125deg, #0f766e 0%, #0d9488 45%, #14b8a6 100%);
+  /* 语义色 */
+  --danger: #dc2626;
+  --success: #059669;
+  /* 柔和层叠阴影（浅青晕） */
+  --shadow-card: 0 1px 2px rgb(22 48 44 / 0.05), 0 8px 24px rgb(13 148 136 / 0.06);
+  --shadow-lift: 0 6px 16px rgb(22 48 44 / 0.08), 0 16px 40px rgb(13 148 136 / 0.14);
+  /* 浮层半透底（顶栏/导航等） */
+  --glass: rgb(255 255 255 / 0.78);
+  /* 背景晨雾光斑强度（刻意很低，只留一点空气感） */
+  --mist-opacity: 0.22;
 }
 
 [data-theme="dark"] {
-  --canvas: #0a0c11;
-  --card: #13161d;
-  --subtle: #1a1e27;
-  --hover: #22262f;
-  --fg: #e8eaf0;
-  --muted: #8b93a5;
-  --line: #262b36;
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --accent-soft: #1e2140;
+  --canvas: #0e1716;
+  --card: #162220;
+  --subtle: #1b2a27;
+  --hover: #233631;
+  --fg: #e1efeb;
+  --muted: #89a29b;
+  --line: rgb(255 255 255 / 0.08);
+  --accent: #2dd4bf;
+  --accent-hover: #5eead4;
+  --accent-soft: rgb(45 212 191 / 0.14);
+  --accent-2: #fb923c;
+  --accent-grad: linear-gradient(125deg, #0d9488 0%, #14b8a6 55%, #2dd4bf 100%);
+  --danger: #f87171;
+  --success: #34d399;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.35), 0 10px 30px rgb(0 0 0 / 0.3);
+  --shadow-lift: 0 8px 24px rgb(0 0 0 / 0.45), 0 16px 44px rgb(0 0 0 / 0.4);
+  --glass: rgb(17 27 25 / 0.78);
+  --mist-opacity: 0.14;
 }
 
 @theme inline {
-  --font-sans: ui-sans-serif, system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-display: var(--font-syne), var(--font-manrope), ui-sans-serif, "PingFang SC", sans-serif;
+  --font-mono: var(--font-jbmono), ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-canvas: var(--canvas);
   --color-card: var(--card);
   --color-subtle: var(--subtle);
@@ -41,6 +71,11 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-2: var(--accent-2);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --shadow-card: var(--shadow-card);
+  --shadow-lift: var(--shadow-lift);
 }
 
 html {
@@ -53,7 +88,7 @@ html[data-theme="dark"] {
 body {
   background: var(--canvas);
   color: var(--fg);
-  font-family: ui-sans-serif, system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   transition: background-color 0.25s ease, color 0.25s ease;
 }
 
@@ -70,7 +105,7 @@ body {
   to { opacity: 1; }
 }
 @keyframes ws-fade-up {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
 @keyframes ws-pop {
@@ -87,11 +122,201 @@ body {
   0%, 100% { transform: translate(0, 0) scale(1); }
   50% { transform: translate(24px, -28px) scale(1.1); }
 }
+@keyframes ws-shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+@keyframes ws-grad-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+/* 晨雾光斑缓慢漂移（时长错开，运动不可预测） */
+@keyframes mist-drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  33% { transform: translate(9vw, -7vh) scale(1.18) rotate(28deg); }
+  66% { transform: translate(-6vw, 6vh) scale(0.92) rotate(-18deg); }
+}
+@keyframes mist-drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40% { transform: translate(-10vw, 5vh) scale(1.14); }
+  70% { transform: translate(5vw, -8vh) scale(0.95); }
+}
+@keyframes mist-drift-c {
+  0%, 100% { transform: translate(0, 0) scale(1.05); }
+  50% { transform: translate(7vw, 9vh) scale(0.9); }
+}
+
+/* ================= 晨雾背景 ================= */
+
+/* 全站背景层：极淡的青绿晨雾光斑。挂 .bg-stage 于布局根，内容层自行 z-10 */
+.bg-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.bg-stage .bg-blob {
+  position: absolute;
+  width: 46vw;
+  height: 46vw;
+  min-width: 340px;
+  min-height: 340px;
+  border-radius: 9999px;
+  filter: blur(110px);
+  opacity: var(--mist-opacity);
+  will-change: transform;
+}
+.bg-blob.blob-mint {
+  top: -14%;
+  left: -10%;
+  background: #5eead4;
+  animation: mist-drift-a 36s ease-in-out infinite;
+}
+.bg-blob.blob-teal {
+  top: 22%;
+  right: -16%;
+  background: #14b8a6;
+  animation: mist-drift-b 44s ease-in-out infinite;
+}
+.bg-blob.blob-aqua {
+  bottom: -18%;
+  left: 26%;
+  background: #67e8f9;
+  opacity: calc(var(--mist-opacity) * 0.66);
+  animation: mist-drift-c 52s ease-in-out infinite;
+}
+[data-theme="dark"] .bg-blob.blob-mint { background: #0f766e; }
+[data-theme="dark"] .bg-blob.blob-teal { background: #0d9488; }
+[data-theme="dark"] .bg-blob.blob-aqua { background: #155e75; }
+
+/* ================= 工具类 ================= */
+
+/* 渐变主色底（首页主卡、logo、选中导航） */
+.bg-grad-accent {
+  background: var(--accent-grad);
+}
+/* 渐变缓慢流动（配合 background-size 拉宽渐变） */
+.anim-grad {
+  background-size: 220% 220%;
+  animation: ws-grad-shift 9s ease-in-out infinite;
+}
+/* 玻璃拟态卡片：半透底 + 背景模糊 + 细边 + 顶部内高光 */
+.glass-card {
+  background: var(--glass);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+[data-theme="dark"] .glass-card {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+/* 渐变文字 */
+.text-grad {
+  background: var(--accent-grad);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* 高光扫过（首页主卡装饰） */
+.anim-shimmer {
+  background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.14) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: ws-shimmer 5s linear infinite;
+}
+/* 卡片统一 hover：升起 + 柔光 + 描边泛主色 */
+.card-hover {
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lift);
+  border-color: var(--accent);
+}
+
+/* 共享按钮：主操作 = 实心青绿 */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 2px 8px rgb(13 148 136 / 0.25);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: 0 4px 16px rgb(13 148 136 / 0.35);
+}
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+/* 共享按钮：次要操作 = 描边 */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--fg);
+  border: 1px solid var(--line);
+  background: var(--subtle);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--accent);
+}
+.btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+/* 共享输入框 */
+.input {
+  border-radius: 0.75rem;
+  border: 1px solid var(--line);
+  background: var(--card);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--fg);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.input::placeholder {
+  color: var(--muted);
+}
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgb(13 148 136 / 0.16);
+}
+/* 小徽章/标签 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  background: var(--subtle);
+  padding: 0.125rem 0.625rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
 
 /* 页面进入（纯淡入，避免位移带来的晃动感） */
 .anim-page { animation: ws-fade-in 0.2s ease-out both; }
 /* 卡片进入（可配 inline animationDelay 做级联） */
-.anim-card { animation: ws-fade-up 0.3s ease-out both; }
+.anim-card { animation: ws-fade-up 0.35s ease-out both; }
 /* 图标/小元素弹出 */
 .anim-pop { animation: ws-pop 0.35s ease both; }
 
@@ -107,71 +332,21 @@ button:active:not(:disabled) {
   transform: scale(0.96);
 }
 
-/* 登录/注册页漂浮装饰光斑 */
-.ws-blob {
-  position: fixed;
-  border-radius: 9999px;
-  filter: blur(90px);
-  opacity: 0.22;
-  pointer-events: none;
-  animation: ws-float 9s ease-in-out infinite;
-}
-[data-theme="dark"] .ws-blob {
-  opacity: 0.16;
-}
-
 /* 尊重系统「减弱动态效果」设置 */
 @media (prefers-reduced-motion: reduce) {
   .anim-page,
   .anim-card,
   .anim-pop,
-  .ws-blob,
+  .anim-grad,
+  .anim-shimmer,
+  .bg-blob,
   .logo-badge:hover {
     animation: none !important;
-  }  button:active:not(:disabled) {
+  }
+  button:active:not(:disabled) {
     transform: none;
   }
-}
-
-/* 主题切换时卡片/边框平滑过渡 */
-.themed,
-.themed * {
-  transition-property: background-color, border-color, color, fill, stroke;
-  transition-duration: 0.25s;
-  transition-timing-function: ease;
-}
-
-/* React Flow 连线端口：扩大点击热区（视觉尺寸不变，热区向外扩 8px） */
-.react-flow__handle {
-  position: absolute;
-}
-.react-flow__handle::after {
-  content: "";
-  position: absolute;
-  inset: -8px;
-  border-radius: 9999px;
-}
-
-/* React Flow 画布在深色主题下的适配 */
-[data-theme="dark"] .react-flow {
-  background: var(--canvas);
-}
-[data-theme="dark"] .react-flow__background {
-  --xy-background-color: var(--canvas);
-}
-[data-theme="dark"] .react-flow__controls button {
-  background: var(--card);
-  border-bottom: 1px solid var(--line);
-  color: var(--fg);
-  fill: var(--fg);
-}
-[data-theme="dark"] .react-flow__controls button:hover {
-  background: var(--hover);
-}
-[data-theme="dark"] .react-flow__edge-path {
-  stroke: #4b5568;
-}
-[data-theme="dark"] .react-flow__attribution {
-  background: transparent;
-  color: var(--muted);
+  .card-hover:hover {
+    transform: none;
+  }
 }

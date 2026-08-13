@@ -99,15 +99,47 @@ export function updateUser(id: string, patch: { password?: string; role?: Role }
   return { ...existing, password, role };
 }
 
-/** 删除用户，同时清理其模型预设、知识库笔记与 session */
+/** 删除用户，同时清理其模型预设、知识库笔记、API 令牌与 session */
 export function deleteUser(id: string): boolean {
   const db = getDb();
   const result = db.prepare("DELETE FROM users WHERE id = ?").run(id);
   if (result.changes === 0) return false;
   db.prepare("DELETE FROM model_presets WHERE user_id = ?").run(id);
   db.prepare("DELETE FROM knowledge_notes WHERE user_id = ?").run(id);
+  db.prepare("DELETE FROM api_tokens WHERE user_id = ?").run(id);
   db.prepare("DELETE FROM sessions WHERE user_id = ?").run(id);
   return true;
+}
+
+// ---------- API 令牌（知识库 MCP 等本机工具用） ----------
+
+/** 获取用户 API 令牌，不存在则生成 */
+export function getOrCreateApiToken(userId: string): string {
+  const db = getDb();
+  const row = db.prepare("SELECT token FROM api_tokens WHERE user_id = ?").get(userId) as unknown as
+    | { token: string }
+    | undefined;
+  if (row) return row.token;
+  const token = crypto.randomBytes(24).toString("hex");
+  db.prepare("INSERT INTO api_tokens (token, user_id, created_at) VALUES (?, ?, ?)").run(
+    token,
+    userId,
+    new Date().toISOString(),
+  );
+  return token;
+}
+
+/** 重置令牌：旧令牌立即失效，返回新令牌 */
+export function regenerateApiToken(userId: string): string {
+  getDb().prepare("DELETE FROM api_tokens WHERE user_id = ?").run(userId);
+  return getOrCreateApiToken(userId);
+}
+
+export function findUserByApiToken(token: string): User | undefined {
+  const row = getDb().prepare("SELECT user_id FROM api_tokens WHERE token = ?").get(token) as unknown as
+    | { user_id: string }
+    | undefined;
+  return row ? findUserById(row.user_id) : undefined;
 }
 
 // ---------- Session ----------

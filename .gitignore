@@ -44,6 +44,8 @@ next-env.d.ts
 
 # 本地数据（含模型 ApiKey，切勿提交）
 /data/
+# pi-service 本地运行数据（auth.json / models.json / sessions，切勿提交）
+/pi-service/data/
 
 # Python 转换管线虚拟环境
 /tools/.venv/
@@ -57,3 +59,13 @@ __pycache__/
 
 # 运行日志
 server.log
+
+# image-mcp 生成的图片（默认保存目录）
+/generated-images/
+
+# 8300 分享通道目录（docker compose share 服务托管，内容为临时分发物）
+/share/
+
+# frp 真实配置（frps.toml 含 auth token，切勿提交；frpc.toml 为各机器本地配置。示例 frpc.example.toml 保留跟踪）
+/frp/frps.toml
+/frp/frpc.toml

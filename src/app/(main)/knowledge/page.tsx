@@ -37,7 +37,31 @@ export default function KnowledgePage() {
   const [newSlug, setNewSlug] = useState("");
   const [uploading, setUploading] = useState(false);
   const [needLogin, setNeedLogin] = useState(false);
+  const [mcpOpen, setMcpOpen] = useState(false);
+  const [apiToken, setApiToken] = useState<string | null>(null);
+  const [tokenBusy, setTokenBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadToken = async () => {
+    setTokenBusy(true);
+    try {
+      const res = await fetch("/api/api-token");
+      if (res.ok) setApiToken((await res.json()).token ?? null);
+    } finally {
+      setTokenBusy(false);
+    }
+  };
+
+  const resetToken = async () => {
+    if (!confirm("重置后旧令牌立即失效，本机 mcp.json 里的令牌需同步更新。继续？")) return;
+    setTokenBusy(true);
+    try {
+      const res = await fetch("/api/api-token", { method: "POST" });
+      if (res.ok) setApiToken((await res.json()).token ?? null);
+    } finally {
+      setTokenBusy(false);
+    }
+  };
 
   const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -301,7 +325,7 @@ export default function KnowledgePage() {
   return (
     <div className="flex h-full">
       {/* 笔记列表 */}
-      <div className="flex w-60 shrink-0 flex-col border-r border-line bg-card">
+      <div className="flex w-44 shrink-0 flex-col border-r border-line bg-card md:w-60">
         <div className="space-y-2 border-b border-line p-3">
           <input
             value={search}
@@ -419,7 +443,7 @@ export default function KnowledgePage() {
           <div className="flex gap-2 border-t border-line p-2">
             <button
               onClick={deleteSelected}
-              className="flex-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-red-500"
+              className="flex-1 rounded-lg bg-danger px-3 py-1.5 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90"
             >
               删除选中（{selected.size}）
             </button>
@@ -434,11 +458,71 @@ export default function KnowledgePage() {
             </button>
           </div>
         )}
+        {/* MCP 接入：本机 Kimi Web / Kimi Code CLI 经 MCP 读取知识库 */}
+        <div className="border-t border-line p-2">
+          <button
+            onClick={() => {
+              setMcpOpen((v) => !v);
+              if (!mcpOpen && !apiToken && !tokenBusy) loadToken();
+            }}
+            className="w-full rounded-lg px-2 py-1.5 text-left text-xs font-medium text-muted transition-colors hover:bg-subtle hover:text-fg"
+          >
+            {mcpOpen ? "▾" : "▸"} MCP 接入（本机 AI 读知识库/提示词）
+          </button>
+          {mcpOpen && (
+            <div className="mt-1 space-y-2 px-1 text-xs text-muted">
+              <p>
+                本机 Kimi Web / Kimi Code CLI 可通过 MCP 实时检索知识库、复制提示词库模板内容。
+                <a href="/api/bridge" className="text-accent hover:underline">
+                  下载统一桥 workbench-bridge.mjs
+                </a>
+                （这一个脚本同时覆盖快捷指令本机执行与远程设备心跳），把下面配置写入本机{" "}
+                <code>~/.kimi-code/mcp.json</code>：
+              </p>
+              <pre className="max-h-56 overflow-auto rounded-lg border border-line bg-canvas p-2 font-mono text-[11px] leading-4 text-fg select-all">
+{`{
+  "mcpServers": {
+    "workbench-knowledge": {
+      "command": "node",
+      "args": ["<脚本路径>/workbench-bridge.mjs", "mcp"],
+      "env": {
+        "WORKBENCH_URL": "${typeof window !== "undefined" ? window.location.origin : ""}",
+        "WORKBENCH_API_TOKEN": "${apiToken ?? "加载中…"}"
+      }
+    }
+  }
+}`}
+              </pre>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const text = apiToken ?? "";
+                    if (text && navigator.clipboard) {
+                      navigator.clipboard.writeText(text).catch(() => {});
+                    }
+                  }}
+                  disabled={!apiToken || tokenBusy}
+                  className="rounded-lg border border-line px-2 py-1 transition-colors hover:bg-subtle hover:text-fg disabled:opacity-50"
+                >
+                  复制令牌
+                </button>
+                <button
+                  onClick={resetToken}
+                  disabled={tokenBusy}
+                  className="rounded-lg border border-line px-2 py-1 transition-colors hover:bg-subtle hover:text-fg disabled:opacity-50"
+                >
+                  {tokenBusy ? "处理中…" : "重置令牌"}
+                </button>
+              </div>
+              <p>令牌等同密码，请勿外泄；泄露后点「重置令牌」。</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 编辑区 / 图谱 */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-line bg-card px-4 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-card px-4 py-2">
           <span className="text-sm text-muted">
             {activeSlug ? activeSlug : "未选择笔记"}
             {savedAt && <span className="ml-2 text-xs text-muted">已保存 {savedAt}</span>}
@@ -454,7 +538,7 @@ export default function KnowledgePage() {
                 </button>
                 <button
                   onClick={remove}
-                  className="rounded-lg border border-red-200 px-3 py-1 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/15"
+                  className="rounded-lg border border-danger/40 px-3 py-1 text-sm text-danger transition-colors hover:bg-danger/10"
                 >
                   删除
                 </button>
@@ -500,7 +584,7 @@ export default function KnowledgePage() {
               placeholder="用 Markdown 编写笔记，[[双方括号]] 创建双链，#标签 分类…"
               className="min-w-0 flex-1 resize-none bg-transparent p-4 font-mono text-sm leading-6 text-fg outline-none placeholder:text-muted"
             />
-            <div className="w-52 shrink-0 overflow-y-auto border-l border-line bg-card p-3">
+            <div className="hidden w-52 shrink-0 overflow-y-auto border-l border-line bg-card p-3 md:block">
               <div className="text-xs font-medium text-muted">反向链接（{backlinks.length}）</div>
               <div className="mt-2 space-y-1">
                 {backlinks.length === 0 ? (
@@ -635,7 +719,7 @@ function TagGroup({
         {tag !== "未分类" && (
           <button
             onClick={() => onDeleteTag(tag)}
-            className="hidden shrink-0 rounded px-1 text-xs text-muted transition-colors hover:text-red-500 group-hover:block"
+            className="hidden shrink-0 rounded px-1 text-xs text-muted transition-colors hover:text-danger group-hover:block"
             title={`删除标签 #${tag}`}
           >
             ✕

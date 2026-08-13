@@ -2,6 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { officialUsagePage } from "@/lib/usage-pages";
+import type { UsageResult } from "@/lib/usage-api";
+import type { ModelTokenStats, TokenBucket } from "@/lib/token-usage";
+
+/** /api/models/[id]/usage 的面板数据：官方直查 + 本服务器 PIAgent 会话 token 统计 */
+interface UsagePanelData {
+  usage: UsageResult | null;
+  usageError: string | null;
+  tokens: ModelTokenStats | null;
+}
 
 interface ModelPreset {
   id: string;
@@ -19,6 +28,112 @@ function maskKey(key: string) {
   return `${key.slice(0, 4)}…${key.slice(-4)}`;
 }
 
+function formatMoney(n: number) {
+  return n.toFixed(2);
+}
+
+/** API 直查用量摘要：余额卡片或额度进度条 */
+function UsageSummary({ data }: { data: UsagePanelData | undefined }) {
+  if (!data) return <p className="text-xs text-muted">用量查询中…</p>;
+  if (!data.usage) {
+    return <p className="text-xs text-muted">API 直查不可用：{data.usageError ?? "查询失败"}</p>;
+  }
+  const entry = data.usage;
+  if (entry.kind === "balance") {
+    return (
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-1">
+        <div>
+          <p className="text-xs text-muted">可用余额</p>
+          <p className="text-lg font-semibold text-fg">
+            {entry.currency}
+            {formatMoney(entry.total)}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">充值</p>
+          <p className="text-sm text-fg">
+            {entry.currency}
+            {formatMoney(entry.paid)}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">赠送/代金券</p>
+          <p className="text-sm text-fg">
+            {entry.currency}
+            {formatMoney(entry.granted)}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {entry.windows.map((w) => {
+        const pct = Math.max(0, Math.min(100, w.percent));
+        return (
+          <div key={w.label}>
+            <div className="flex items-baseline justify-between text-xs">
+              <span className="text-muted">{w.label}</span>
+              <span className="text-fg">
+                已用 {pct.toFixed(1)}%
+                {w.resetAt && (
+                  <span className="ml-2 text-muted">重置 {new Date(w.resetAt).toLocaleString()}</span>
+                )}
+              </span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-subtle">
+              <div
+                className={`h-full rounded-full ${pct >= 95 ? "bg-danger" : pct >= 80 ? "bg-amber-500" : "bg-accent"}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatTokens(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(Math.floor(n));
+}
+
+/** 缓存命中率 = 缓存读取 ÷ 总输入（总输入 = 未缓存 + 缓存读取 + 缓存创建） */
+function cacheHitRate(b: TokenBucket): string | null {
+  const total = b.input + b.cacheRead + b.cacheWrite;
+  return total > 0 ? `${((b.cacheRead / total) * 100).toFixed(1)}%` : null;
+}
+
+/** Token 用量三窗口（24h / 7 天 / 30 天），数据来自本服务器 PIAgent 会话记录 */
+function TokenStats({ stats }: { stats: ModelTokenStats }) {
+  const windows = [
+    { label: "24 小时", bucket: stats.h24 },
+    { label: "7 天", bucket: stats.d7 },
+    { label: "30 天", bucket: stats.d30 },
+  ];
+  return (
+    <div>
+      <p className="mb-1.5 text-xs text-muted">Token 用量（本服务器 PIAgent 会话统计）</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {windows.map((w) => {
+          const hit = cacheHitRate(w.bucket);
+          return (
+            <div key={w.label} className="rounded-lg bg-subtle px-3 py-2">
+              <p className="text-xs text-muted">{w.label}</p>
+              <p className="mt-0.5 text-sm text-fg">
+                输入 {formatTokens(w.bucket.input)} · 输出 {formatTokens(w.bucket.output)}
+              </p>
+              <p className="text-xs text-muted">缓存命中 {hit ?? "—"}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function ModelsPage() {
   const [presets, setPresets] = useState<ModelPreset[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +146,8 @@ export default function ModelsPage() {
   const [needLogin, setNeedLogin] = useState(false);
   // 右侧用量面板当前展示的预设 id
   const [usageId, setUsageId] = useState<string | null>(null);
+  // API 直查 + token 统计结果：usageData 中无记录即视为加载中
+  const [usageData, setUsageData] = useState<Record<string, UsagePanelData>>({});
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/models");
@@ -46,6 +163,36 @@ export default function ModelsPage() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // 选中预设后自动拉取用量面板数据；usageData 中无记录即视为加载中
+  useEffect(() => {
+    if (!usageId || usageData[usageId]) return;
+    fetch(`/api/models/${usageId}/usage`)
+      .then(async (res) => {
+        const data = await res.json();
+        setUsageData((m) => ({
+          ...m,
+          [usageId]:
+            res.ok && data.ok
+              ? { usage: data.usage ?? null, usageError: data.usageError ?? null, tokens: data.tokens ?? null }
+              : { usage: null, usageError: data.error ?? "查询失败", tokens: null },
+        }));
+      })
+      .catch((e) =>
+        setUsageData((m) => ({
+          ...m,
+          [usageId]: { usage: null, usageError: e instanceof Error ? e.message : String(e), tokens: null },
+        }))
+      );
+  }, [usageId, usageData]);
+
+  // 清掉缓存记录，由上面的 effect 重新拉取
+  const reloadUsage = (id: string) =>
+    setUsageData((m) => {
+      const next = { ...m };
+      delete next[id];
+      return next;
+    });
 
   const submit = async () => {
     setError("");
@@ -113,12 +260,12 @@ export default function ModelsPage() {
   const usagePage = usagePreset ? officialUsagePage(usagePreset) : null;
 
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
-      <div className="flex items-center justify-between">
+    <div className="flex h-full flex-col gap-4 p-4 md:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-semibold text-fg">模型预设</h1>
           <p className="mt-1 text-sm text-muted">
-            预设大模型的 ApiKey 与 BaseUrl 并命名包装，工作流节点可直接选用；点「用量」在右侧内嵌官方控制台查看详细用量（需安装内嵌助手 Chrome 扩展）。
+            预设大模型的 ApiKey 与 BaseUrl 并命名包装，宠物对话等场景可直接选用；点「用量」在右侧内嵌官方控制台查看详细用量（需安装内嵌助手 Chrome 扩展）。
           </p>
         </div>
         <button
@@ -138,7 +285,7 @@ export default function ModelsPage() {
         {/* 左列：表单 + 预设列表 */}
         <div className="flex w-full shrink-0 flex-col gap-3 overflow-y-auto lg:w-96">
           {showForm && (
-            <div className="space-y-3 rounded-xl border border-line bg-card p-4 shadow-sm">
+            <div className="space-y-3 rounded-2xl border border-line bg-card p-4 shadow-card">
               {(
                 [
                   { key: "name", label: "包装名称", placeholder: "如：Kimi 生产环境" },
@@ -158,7 +305,7 @@ export default function ModelsPage() {
                   />
                 </label>
               ))}
-              {error && <p className="text-sm text-red-500">{error}</p>}
+              {error && <p className="text-sm text-danger">{error}</p>}
               <button
                 onClick={submit}
                 className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-hover disabled:opacity-50"
@@ -171,7 +318,7 @@ export default function ModelsPage() {
           {loading ? (
             <p className="text-sm text-muted">加载中…</p>
           ) : presets.length === 0 ? (
-            <div className="flex flex-col items-center rounded-xl border border-dashed border-line bg-card py-14 shadow-sm">
+            <div className="flex flex-col items-center rounded-2xl border border-dashed border-line bg-card py-14 shadow-card">
               <div className="text-3xl">🤖</div>
               <p className="mt-3 text-sm font-medium text-fg">还没有模型预设</p>
               <p className="mt-1 text-sm text-muted">点击右上角「新增预设」添加第一个模型。</p>
@@ -182,7 +329,7 @@ export default function ModelsPage() {
               return (
                 <div
                   key={p.id}
-                  className={`rounded-xl border bg-card p-4 shadow-sm transition-colors ${
+                  className={`rounded-2xl border bg-card p-4 shadow-card transition-colors ${
                     usageId === p.id ? "border-accent ring-2 ring-accent/25" : "border-line"
                   }`}
                 >
@@ -226,7 +373,7 @@ export default function ModelsPage() {
                     </button>
                     <button
                       onClick={() => remove(p.id)}
-                      className="rounded-lg border border-red-200 px-2.5 py-1 text-red-500 transition-colors hover:bg-red-50 dark:border-red-500/30 dark:hover:bg-red-500/15"
+                      className="rounded-lg border border-danger/40 px-2.5 py-1 text-danger transition-colors hover:bg-danger/10"
                     >
                       删除
                     </button>
@@ -238,7 +385,7 @@ export default function ModelsPage() {
         </div>
 
         {/* 右侧：官方用量面板 */}
-        <div className="flex min-h-[50vh] min-w-0 flex-1 flex-col rounded-xl border border-line bg-card shadow-sm lg:min-h-0">
+        <div className="flex min-h-[50vh] min-w-0 flex-1 flex-col rounded-2xl border border-line bg-card shadow-card lg:min-h-0">
           {usagePreset && usagePage ? (
             <>
               <div className="flex items-center justify-between border-b border-line px-4 py-2">
@@ -265,6 +412,21 @@ export default function ModelsPage() {
                   </button>
                 </div>
               </div>
+              {/* 用量摘要：官方 API 直查 + PIAgent 会话 token 统计，失败仅提示，不影响下方内嵌控制台 */}
+              <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-2.5">
+                <div className="min-w-0 flex-1 space-y-3">
+                  <UsageSummary data={usageData[usagePreset.id]} />
+                  {usageData[usagePreset.id]?.tokens && (
+                    <TokenStats stats={usageData[usagePreset.id].tokens!} />
+                  )}
+                </div>
+                <button
+                  onClick={() => reloadUsage(usagePreset.id)}
+                  className="shrink-0 rounded-lg border border-line px-2.5 py-1 text-xs text-muted transition-colors hover:bg-subtle hover:text-fg"
+                >
+                  刷新
+                </button>
+              </div>
               <iframe
                 src={usagePage.url}
                 title={usagePage.provider}
@@ -279,7 +441,7 @@ export default function ModelsPage() {
               </p>
             </>
           ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center md:p-8">
               <p className="text-sm text-muted">点击左侧预设卡片的「用量」，在此内嵌官方控制台查看详细用量</p>
               <p className="text-xs text-muted">
                 内嵌需安装

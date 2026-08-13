@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth";
+import { getApiUser, getSessionUser } from "@/lib/auth";
 import { createTemplate, getPromptsData, DEFAULT_GROUP } from "@/lib/prompts-store";
 
-export async function GET() {
-  const user = await getSessionUser();
+// GET 双认证（session cookie 或 Bearer 个人 API 令牌），供统一桥 MCP 模式读取
+export async function GET(req: Request) {
+  const user = await getApiUser(req);
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
   return NextResponse.json(await getPromptsData());
 }

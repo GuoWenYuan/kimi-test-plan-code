@@ -86,7 +86,7 @@ export default function UnityPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
+    <div className="mx-auto max-w-3xl p-4 md:p-6">
       <h1 className="text-xl font-semibold text-fg">Unity 控制</h1>
       <p className="mt-1 text-sm text-muted">
         通过本机 Unity Bridge 插件操控你电脑上的 Unity Editor。请先{" "}
@@ -98,7 +98,7 @@ export default function UnityPage() {
       </p>
 
       {/* 连接区 */}
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <input
           value={bridgeUrl}
           onChange={(e) => setBridgeUrl(e.target.value)}
@@ -113,7 +113,7 @@ export default function UnityPage() {
           {connecting ? "连接中…" : info ? "重新连接" : "连接本机 Unity"}
         </button>
         {info && (
-          <span className="text-sm text-green-600 dark:text-green-400">
+          <span className="text-sm text-success">
             已连接：{info.project}（Unity {info.unity}，{info.commands} 个命令）
           </span>
         )}
@@ -124,8 +124,8 @@ export default function UnityPage() {
         <div className="mt-6 space-y-3">
           <h2 className="text-sm font-medium text-fg">可用命令</h2>
           {commands.map((cmd) => (
-            <div key={cmd.name} className="rounded-xl border border-line bg-card p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
+            <div key={cmd.name} className="rounded-2xl border border-line bg-card p-4 shadow-card">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-medium text-fg">{cmd.name}</div>
                   <p className="mt-0.5 text-xs text-muted">{cmd.description}</p>
@@ -163,15 +163,15 @@ export default function UnityPage() {
               清空
             </button>
           </div>
-          <div className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg border border-line bg-subtle p-3 font-mono text-xs">
+          <div className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-2xl border border-line bg-subtle p-3 font-mono text-xs">
             {logs.map((log, i) => (
               <div
                 key={i}
                 className={
                   log.kind === "error"
-                    ? "text-rose-600 dark:text-rose-400"
+                    ? "text-danger"
                     : log.kind === "ok"
-                      ? "text-green-600 dark:text-green-400"
+                      ? "text-success"
                       : "text-muted"
                 }
               >

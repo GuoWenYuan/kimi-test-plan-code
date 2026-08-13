@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { findSession, findUserById, seedSuperAdmin, type User } from "@/lib/store";
+import { findSession, findUserByApiToken, findUserById, seedSuperAdmin, type User } from "@/lib/store";
 
 export const SESSION_COOKIE = "session";
 
@@ -13,6 +13,16 @@ export async function getSessionUser(): Promise<User | null> {
   const session = findSession(token);
   if (!session) return null;
   return findUserById(session.userId) ?? null;
+}
+
+/** API 用：优先 Authorization: Bearer <API 令牌>，否则回退 session cookie */
+export async function getApiUser(req: Request): Promise<User | null> {
+  const m = /^Bearer\s+(.+)$/.exec(req.headers.get("authorization") ?? "");
+  if (m) {
+    seedSuperAdmin();
+    return findUserByApiToken(m[1].trim()) ?? null;
+  }
+  return getSessionUser();
 }
 
 /** 页面用：未登录跳转到 /login */

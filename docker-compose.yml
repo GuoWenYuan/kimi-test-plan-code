@@ -8,9 +8,17 @@ services:
       # SQLite 数据持久化到宿主机 ./data
       - ./data:/app/data
     environment:
+      # 容器默认 UTC，与用户（UTC+8）差 8 小时会导致宠物任务时间跑偏，统一为上海时区
+      - TZ=Asia/Shanghai
       - DATABASE_PATH=/app/data/app.db
       - PI_SERVICE_URL=http://pi-service:39273
       - PI_SERVICE_TOKEN=${PI_SERVICE_TOKEN}
+      # 宠物外观 AI 生成（RightAPI gpt 生图），key 写在 .env
+      - RIGHTAPI_API_KEY=${RIGHTAPI_API_KEY}
+      - RIGHTAPI_BASE_URL=${RIGHTAPI_BASE_URL}
+      - RIGHTAPI_MODEL=${RIGHTAPI_MODEL}
+      # 宠物定时任务微信推送（Server酱 SendKey，写在 .env）
+      - SERVERCHAN_SENDKEY=${SERVERCHAN_SENDKEY}
     depends_on:
       - pi-service
     restart: unless-stopped
@@ -22,9 +30,36 @@ services:
     volumes:
       # pi 会话与 models.json 持久化到宿主机 ./data/pi-agent
       - ./data/pi-agent:/data/pi-agent
+      # 宠物工作区：workbench 传 /app/data/pets/<id>/workspace 作 pi 的 cwd，两容器路径须一致
+      - ./data/pets:/app/data/pets
       # 代码读取子 agent 的可读根（只读挂载整个仓库；要读其他目录在 /workspace 下加挂载）
       - .:/workspace:ro
     environment:
       - PI_SERVICE_TOKEN=${PI_SERVICE_TOKEN}
       - CODE_ROOT=/workspace
+    restart: unless-stopped
+
+  # 8300 分享通道：静态托管 ./share 目录，用于给用户分发文件（预览图、生成物等）
+  share:
+    image: nginx:alpine
+    container_name: share
+    ports:
+      - "8300:80"
+    volumes:
+      - ./share:/usr/share/nginx/html:ro
+    restart: unless-stopped
+
+  # frps：远程设备穿透服务端（手机访问 workbench 与各机器 AI 工具的隧道入口，
+  # 见 docs/remote-devices.md）。仅当本服务器有公网入口时启用；
+  # 若服务器本身在内网，frps 应部署到公网 VPS，删除本服务即可。
+  frps:
+    image: fatedier/frps:v0.61.1
+    container_name: frps
+    command: ["-c", "/etc/frp/frps.toml"]
+    volumes:
+      - ./frp/frps.toml:/etc/frp/frps.toml:ro
+    ports:
+      - "7000:7000"
+      # frpc 映射工具的远程端口段（与 frps.toml transport.allowPorts 一致）
+      - "39100-39110:39100-39110"
     restart: unless-stopped

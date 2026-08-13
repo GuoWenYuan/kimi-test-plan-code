@@ -123,7 +123,7 @@ export default function PromptsPage() {
                       removeGroup(g);
                     }}
                     className={`hidden text-xs transition-colors group-hover:block ${
-                      activeGroup === g ? "text-accent hover:text-accent-hover" : "text-muted hover:text-red-500"
+                      activeGroup === g ? "text-accent hover:text-accent-hover" : "text-muted hover:text-danger"
                     }`}
                     title="删除分组"
                   >
@@ -154,13 +154,13 @@ export default function PromptsPage() {
       </div>
 
       {/* 模板列表 */}
-      <div className="min-w-0 flex-1 overflow-y-auto p-6">
+      <div className="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mx-auto max-w-3xl">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h1 className="text-xl font-semibold text-fg">提示词模板 · {activeGroup}</h1>
               <p className="mt-1 text-sm text-muted">
-                在工作流的大模型节点中可一键导入模板后再编辑。
+                按分组管理常用提示词模板，复制后即可在任意大模型工具中使用。
               </p>
             </div>
             <button
@@ -177,8 +177,8 @@ export default function PromptsPage() {
           </div>
 
           {showForm && (
-            <div className="mt-4 space-y-3 rounded-xl border border-line bg-card p-4 shadow-sm">
-              <div className="flex gap-3">
+            <div className="mt-4 space-y-3 rounded-2xl border border-line bg-card p-4 shadow-card">
+              <div className="flex flex-wrap gap-3">
                 <label className="block flex-1">
                   <span className="mb-1 block text-xs font-medium text-muted">模板名称</span>
                   <input
@@ -222,7 +222,7 @@ export default function PromptsPage() {
                   className="w-full resize-y rounded-lg border border-line bg-card px-2.5 py-1.5 text-sm text-fg outline-none transition-colors placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/25"
                 />
               </label>
-              {error && <p className="text-sm text-red-500">{error}</p>}
+              {error && <p className="text-sm text-danger">{error}</p>}
               <button
                 onClick={submit}
                 className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-hover disabled:opacity-50"
@@ -236,7 +236,7 @@ export default function PromptsPage() {
             {loading ? (
               <p className="text-sm text-muted">加载中…</p>
             ) : visible.length === 0 ? (
-              <div className="flex flex-col items-center rounded-xl border border-dashed border-line bg-card py-14 shadow-sm">
+              <div className="flex flex-col items-center rounded-2xl border border-dashed border-line bg-card py-14 shadow-card">
                 <div className="text-3xl">📝</div>
                 <p className="mt-3 text-sm font-medium text-fg">
                   「{activeGroup}」分组还没有模板
@@ -245,7 +245,7 @@ export default function PromptsPage() {
               </div>
             ) : (
               visible.map((t) => (
-                <div key={t.id} className="rounded-xl border border-line bg-card p-4 shadow-sm">
+                <div key={t.id} className="rounded-2xl border border-line bg-card p-4 shadow-card">
                   <div className="flex items-start justify-between">
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-fg">{t.name}</div>
@@ -265,7 +265,7 @@ export default function PromptsPage() {
                       </button>
                       <button
                         onClick={() => remove(t.id)}
-                        className="rounded-lg border border-red-200 px-2.5 py-1 text-red-600 transition-colors hover:bg-red-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10"
+                        className="rounded-lg border border-danger/40 px-2.5 py-1 text-danger transition-colors hover:bg-danger/10"
                       >
                         删除
                       </button>

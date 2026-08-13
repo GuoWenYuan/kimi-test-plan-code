@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "AI 工作台用量面板",
+  "version": "1.0.0",
+  "description": "在本机 AI 工具页面（Kimi Web UI / PIAgent 本机版）注入用量面板：余额、额度窗口、token 消耗与缓存命中。数据来自你的 AI 工作台，令牌仅存本机浏览器。",
+  "permissions": ["storage"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://127.0.0.1:58627/*",
+        "http://localhost:58627/*",
+        "http://127.0.0.1:39273/*",
+        "http://localhost:39273/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "action": {
+    "default_title": "AI 工作台用量面板：点击打开设置"
+  }
+}

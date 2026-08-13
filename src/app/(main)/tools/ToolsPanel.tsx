@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AI_TOOLS, type AiTool } from "@/lib/ai-tools";
+import RemoteDevices from "./RemoteDevices";
 
 type Status = "checking" | "online" | "offline";
 
@@ -196,7 +197,7 @@ export default function ToolsPanel() {
   }
 
   const dotCls = (st: Status | undefined) =>
-    st === "online" ? "bg-green-500" : st === "checking" ? "bg-yellow-400" : "bg-gray-300 dark:bg-gray-600";
+    st === "online" ? "bg-success" : st === "checking" ? "bg-yellow-400" : "bg-muted/40";
 
   /** 嵌入区：collapsed 时无边框无工具栏，iframe 铺满剩余可显示区域；最大化时全屏 */
   function renderEmbed(fullscreen: boolean) {
@@ -206,6 +207,9 @@ export default function ToolsPanel() {
         key={`${active.id}-${effPort(active)}-${tokens[active.id] ?? ""}-${presetFor(active)?.id ?? ""}`}
         src={toolUrl(active, effPort(active), tokens[active.id] ?? "", presetFor(active))}
         title={active.name}
+        // Chrome 142+ Local Network Access：访问 127.0.0.1 等本机地址的 iframe 必须声明权限，
+        // 否则静默拦截不弹提示（145 起拆分为 local-network / loopback-network，三个 token 一起给）
+        allow="local-network-access local-network loopback-network"
         onLoad={() => setStatus((s) => ({ ...s, [active.id]: "online" }))}
         className="min-h-0 w-full flex-1"
       />
@@ -232,7 +236,7 @@ export default function ToolsPanel() {
       return <div className="flex min-h-0 flex-1 flex-col">{iframe}</div>;
     }
     return (
-      <div className="mx-4 mb-4 flex min-h-0 flex-1 flex-col rounded-xl border border-line bg-card shadow-sm">
+      <div className="mx-4 mb-4 flex min-h-0 flex-1 flex-col rounded-2xl border border-line bg-card shadow-card">
         <div className="flex items-center justify-between border-b border-line px-3 py-1.5">
           <span className="text-xs text-muted">
             {active.name} · 127.0.0.1:{effPort(active)}
@@ -294,11 +298,15 @@ export default function ToolsPanel() {
         </div>
       ) : (
         <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-fg">AI 工具</h1>
           <p className="mt-1 text-sm text-muted">
-            工具运行在你自己的电脑上，浏览器直连本机地址，不经过部署服务器；新工具（如 codex）可在 src/lib/ai-tools.ts 注册。
+            工具运行在你自己的电脑上，浏览器直连本机地址，不经过部署服务器；新工具（如 codex）可在 src/lib/ai-tools.ts 注册。安装
+            <a href="/api/usage-panel" className="mx-1 text-accent hover:underline">
+              用量面板扩展
+            </a>
+            可在本机工具页右下角直接查看余额与 token 用量。
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -323,13 +331,13 @@ export default function ToolsPanel() {
         {AI_TOOLS.map((t) => {
           const st = status[t.id] ?? "checking";
           return (
-            <div key={t.id} className="space-y-2 rounded-xl border border-line bg-card p-4 shadow-sm">
+            <div key={t.id} className="space-y-2 rounded-2xl border border-line bg-card p-4 shadow-card">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-fg">{t.name}</span>
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs ${
                     st === "online"
-                      ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
+                      ? "bg-success/15 text-success"
                       : st === "offline"
                         ? "bg-subtle text-muted"
                         : "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400"
@@ -442,6 +450,8 @@ export default function ToolsPanel() {
           );
         })}
       </div>
+
+      <RemoteDevices />
         </div>
       )}
 

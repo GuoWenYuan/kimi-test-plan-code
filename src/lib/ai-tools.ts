@@ -51,14 +51,4 @@ export const AI_TOOLS: AiTool[] = [
     startCommand: "kimi web --keep-alive",
     docs: "https://moonshotai.github.io/kimi-cli/zh/reference/kimi-web.html",
   },
-  {
-    id: "pi-agent-local",
-    name: "PIAgent 本机版",
-    description:
-      "运行在你自己电脑上的 PIAgent（pi-service 本机部署）：浏览器直连本机 127.0.0.1:39273，pi 直接读写你本机的文件与命令，不经过部署服务器。下方选择模型预设后打开即自动配置（#preset= 注入，需本机 pi-service 为最新版；旧版请在页面「模型设置」手动填写）。首次部署见仓库 pi-service/DEPLOY.md。",
-    local: true,
-    port: 39273,
-    modelPreset: true,
-    startCommand: "cd pi-service && npm install --allow-remote=all && npm start",
-  },
 ];

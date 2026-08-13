@@ -34,16 +34,22 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
-      {/* 漂浮装饰光斑 */}
-      <div className="ws-blob left-[12%] top-[18%] h-64 w-64 bg-accent" />
-      <div className="ws-blob bottom-[15%] right-[10%] h-72 w-72 bg-accent" style={{ animationDelay: "-4.5s" }} />
-      <div className="anim-card relative w-full max-w-sm rounded-2xl border border-line bg-card p-8 shadow-lg">
-        <div className="mb-6 flex flex-col items-center gap-2">
-          <span className="anim-pop flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-lg font-bold text-white shadow">
+    <div className="flex min-h-screen items-center justify-center px-4">
+      {/* 晨雾背景 */}
+      <div className="bg-stage" aria-hidden="true">
+        <span className="bg-blob blob-mint" />
+        <span className="bg-blob blob-teal" />
+        <span className="bg-blob blob-aqua" />
+      </div>
+      <div className="anim-card glass-card relative z-10 w-full max-w-sm rounded-3xl p-6 shadow-lift md:p-8">
+        <div className="mb-6 flex flex-col items-center gap-3">
+          <span className="anim-pop bg-grad-accent anim-grad flex h-12 w-12 items-center justify-center rounded-2xl font-display text-xl font-bold text-white shadow-lift">
             站
           </span>
-          <h1 className="text-xl font-bold text-fg">个人工作站</h1>
+          <h1 className="font-display text-2xl font-bold tracking-wide text-fg">
+            个人<span className="text-grad">工作站</span>
+          </h1>
+          <p className="text-xs tracking-widest text-muted">PERSONAL WORKBENCH</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -57,7 +63,7 @@ export default function LoginForm() {
               onChange={(e) => setUsername(e.target.value)}
               required
               autoComplete="username"
-              className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
+              className="input w-full"
             />
           </div>
           <div>
@@ -71,14 +77,14 @@ export default function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
-              className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
+              className="input w-full"
             />
           </div>
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-accent py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-hover disabled:opacity-50"
+            className="btn-primary w-full !py-2.5"
           >
             {loading ? "登录中…" : "登 录"}
           </button>

@@ -1,0 +1,27 @@
+# frpc 客户端示例配置：跑在每一台存放 AI 工具的机器上（公司电脑/家里电脑）
+# frpc 下载：https://github.com/fatedier/frp/releases （按机器架构选包，内含 frpc 可执行文件）
+# 用法：frpc -c frpc.toml
+#
+# 注意：remotePort 在「整个 frps」上唯一——每台机器用不同端口
+#（如公司电脑 39101/39102，家里电脑 39103/39104），冲突会导致后启动的代理失败。
+
+serverAddr = "<frps 地址：workbench 服务器公网 IP 或 VPS>"
+serverPort = 7000
+auth.method = "token"
+auth.token = "<与 frps.toml 的 auth.token 一致>"
+
+# Kimi Web UI（本机 58627，以 kimi web 实际端口为准）
+[[proxies]]
+name = "kimi-web-gongsi"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 58627
+remotePort = 39101
+
+# workbench 本身若也在内网、需要手机访问，可在「workbench 所在机器」的 frpc 加：
+# [[proxies]]
+# name = "workbench"
+# type = "tcp"
+# localIP = "127.0.0.1"
+# localPort = 3000
+# remotePort = 39100

@@ -95,13 +95,13 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 md:p-6">
       <h1 className="text-2xl font-bold text-fg">用户管理</h1>
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
-      {message && <p className="text-sm text-green-600 dark:text-green-400">{message}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
+      {message && <p className="text-sm text-success">{message}</p>}
 
-      <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3 rounded-xl border border-line bg-card p-4 shadow-sm">
+      <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3 rounded-2xl border border-line bg-card p-4 shadow-card">
         <div>
           <label className="mb-1 block text-xs text-muted">用户名</label>
           <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} required className={inputCls} />
@@ -122,7 +122,7 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
         </button>
       </form>
 
-      <div className="overflow-x-auto rounded-xl border border-line bg-card shadow-sm">
+      <div className="overflow-x-auto rounded-2xl border border-line bg-card shadow-card">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-line text-xs uppercase text-muted">
             <tr>
@@ -179,7 +179,7 @@ export default function UsersManager({ currentUserId }: { currentUserId: string 
                         编辑
                       </button>
                       {u.id !== currentUserId && (
-                        <button onClick={() => handleDelete(u)} className="text-sm text-red-500 transition-colors hover:underline">
+                        <button onClick={() => handleDelete(u)} className="text-sm text-danger transition-colors hover:underline">
                           删除
                         </button>
                       )}

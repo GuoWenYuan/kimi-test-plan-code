@@ -4,7 +4,7 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth";
+import { getApiUser } from "@/lib/auth";
 import { createNote, readNote } from "@/lib/knowledge";
 
 const execFileAsync = promisify(execFile);
@@ -22,7 +22,7 @@ async function uniqueSlug(userId: string, base: string): Promise<string> {
 }
 
 export async function POST(req: Request) {
-  const user = await getSessionUser();
+  const user = await getApiUser(req);
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");

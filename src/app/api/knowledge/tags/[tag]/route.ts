@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth";
+import { getApiUser } from "@/lib/auth";
 import { deleteNotesByTag, removeTagFromAllNotes } from "@/lib/knowledge";
 
 type Ctx = { params: Promise<{ tag: string }> };
 
 export async function DELETE(req: Request, ctx: Ctx) {
-  const user = await getSessionUser();
+  const user = await getApiUser(req);
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
   const { tag } = await ctx.params;
   const name = decodeURIComponent(tag);

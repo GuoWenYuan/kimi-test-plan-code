@@ -165,7 +165,7 @@ function json(res, status, obj) {
 
 const server = http.createServer(async (req, res) => {
   // CORS + 私网访问（PNA）：工作流「本机 PIAgent」节点由浏览器从工作站页面跨源
-  // 直连本机 /chat，需要预检放行（写法与 tools/local-bridge.mjs 一致）
+  // 直连本机 /chat，需要预检放行（写法与 tools/workbench-bridge.mjs 一致）
   res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-pi-token");

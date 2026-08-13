@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="420" viewBox="0 0 1280 420" font-family="system-ui, sans-serif">
+  <defs>
+    <radialGradient id="yGrad" cx="42%" cy="30%" r="85%">
+      <stop offset="0%" stop-color="#FFE97A"/>
+      <stop offset="100%" stop-color="#FFCF2E"/>
+    </radialGradient>
+
+    <!-- 身体（小短身 + 深色鞋），各表情共用 -->
+    <g id="yoyo-body">
+      <ellipse cx="100" cy="192" rx="44" ry="7" fill="#000" opacity="0.06"/>
+      <ellipse cx="87" cy="184" rx="10" ry="6.5" fill="#5F4436"/>
+      <ellipse cx="113" cy="184" rx="10" ry="6.5" fill="#5F4436"/>
+      <path d="M72 180 Q68 136 100 132 Q132 136 128 180 Q128 186 120 186 L80 186 Q72 186 72 180 Z" fill="#FFD95E"/>
+      <ellipse cx="68" cy="158" rx="7" ry="5" fill="#FFCF2E" transform="rotate(-20 68 158)"/>
+      <ellipse cx="132" cy="158" rx="7" ry="5" fill="#FFCF2E" transform="rotate(20 132 158)"/>
+    </g>
+
+    <!-- 连帽衫头套（含耳朵） -->
+    <g id="yoyo-hood">
+      <ellipse cx="58" cy="46" rx="13" ry="11" fill="url(#yGrad)" transform="rotate(-25 58 46)"/>
+      <ellipse cx="142" cy="46" rx="13" ry="11" fill="url(#yGrad)" transform="rotate(25 142 46)"/>
+      <ellipse cx="100" cy="90" rx="58" ry="55" fill="url(#yGrad)"/>
+      <circle cx="100" cy="96" r="43" fill="#FFF6EA" stroke="#EFD6BC" stroke-width="2"/>
+    </g>
+
+    <!-- 雀斑腮红点（左右各三颗） -->
+    <g id="yoyo-freckles">
+      <circle cx="66" cy="101" r="2" fill="#E8968F"/>
+      <circle cx="71" cy="105" r="2" fill="#E8968F"/>
+      <circle cx="66" cy="109" r="2" fill="#E8968F"/>
+      <circle cx="134" cy="101" r="2" fill="#E8968F"/>
+      <circle cx="129" cy="105" r="2" fill="#E8968F"/>
+      <circle cx="134" cy="109" r="2" fill="#E8968F"/>
+    </g>
+
+    <!-- 表情 1：待机/开心（豆豆眼 + 微笑） -->
+    <g id="yoyo-happy">
+      <use href="#yoyo-body"/>
+      <use href="#yoyo-hood"/>
+      <use href="#yoyo-freckles"/>
+      <circle cx="84" cy="93" r="5.5" fill="#2b2b2b"/>
+      <circle cx="116" cy="93" r="5.5" fill="#2b2b2b"/>
+      <path d="M95 104 Q100 108 105 104" stroke="#2b2b2b" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- 表情 2：被抚摸（整体歪头 10° + 眯眼笑 + 爱心） -->
+    <g id="yoyo-petted">
+      <g transform="rotate(10 100 160)">
+        <use href="#yoyo-body"/>
+        <use href="#yoyo-hood"/>
+        <g>
+          <circle cx="66" cy="101" r="2.4" fill="#E8968F"/>
+          <circle cx="71" cy="105" r="2.4" fill="#E8968F"/>
+          <circle cx="66" cy="109" r="2.4" fill="#E8968F"/>
+          <circle cx="134" cy="101" r="2.4" fill="#E8968F"/>
+          <circle cx="129" cy="105" r="2.4" fill="#E8968F"/>
+          <circle cx="134" cy="109" r="2.4" fill="#E8968F"/>
+        </g>
+        <path d="M78 93 Q84 88 90 93" stroke="#2b2b2b" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M110 93 Q116 88 122 93" stroke="#2b2b2b" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <path d="M93 102 Q100 112 107 102 Z" fill="#8B3A3A"/>
+      </g>
+      <path d="M100 20 C96 12 84 12 84 22 C84 30 94 34 100 40 C106 34 116 30 116 22 C116 12 104 12 100 20 Z" fill="#F2604C" opacity="0.9" transform="translate(38 -4) scale(0.62)"/>
+    </g>
+
+    <!-- 表情 3：困倦 -->
+    <g id="yoyo-sleepy">
+      <use href="#yoyo-body"/>
+      <use href="#yoyo-hood"/>
+      <g opacity="0.5"><use href="#yoyo-freckles"/></g>
+      <path d="M79 93 Q84 98 89 93" stroke="#2b2b2b" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <path d="M111 93 Q116 98 121 93" stroke="#2b2b2b" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <circle cx="100" cy="105" r="2.5" stroke="#2b2b2b" stroke-width="2" fill="none"/>
+      <text x="148" y="60" font-size="20" fill="#9aa4b2" font-weight="bold">z</text>
+      <text x="160" y="42" font-size="27" fill="#9aa4b2" font-weight="bold">Z</text>
+    </g>
+
+    <!-- 表情 4：饿了（委屈眉 + 汗滴） -->
+    <g id="yoyo-hungry">
+      <use href="#yoyo-body"/>
+      <use href="#yoyo-hood"/>
+      <g opacity="0.6"><use href="#yoyo-freckles"/></g>
+      <path d="M76 82 L90 77" stroke="#2b2b2b" stroke-width="3" stroke-linecap="round"/>
+      <path d="M110 77 L124 82" stroke="#2b2b2b" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="84" cy="95" r="5" fill="#2b2b2b"/>
+      <circle cx="116" cy="95" r="5" fill="#2b2b2b"/>
+      <path d="M94 108 Q100 103 106 108" stroke="#2b2b2b" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+      <path d="M140 60 q5 8 0 12 q-5 -4 0 -12" fill="#7cc7ff"/>
+    </g>
+  </defs>
+
+  <rect width="1280" height="420" fill="#F6F7F9"/>
+
+  <use href="#yoyo-happy" transform="translate(20 8)"/>
+  <use href="#yoyo-petted" transform="translate(260 8)"/>
+  <use href="#yoyo-sleepy" transform="translate(500 8)"/>
+  <use href="#yoyo-hungry" transform="translate(740 8)"/>
+
+  <text x="120" y="216" text-anchor="middle" font-size="14" fill="#6b7280">idle / happy</text>
+  <text x="360" y="216" text-anchor="middle" font-size="14" fill="#6b7280">petted (head tilt)</text>
+  <text x="600" y="216" text-anchor="middle" font-size="14" fill="#6b7280">sleepy</text>
+  <text x="840" y="216" text-anchor="middle" font-size="14" fill="#6b7280">hungry</text>
+
+  <!-- 悬浮球展开面板 mock -->
+  <g transform="translate(985 8)">
+    <rect x="0" y="0" width="270" height="402" rx="16" fill="#ffffff" stroke="#E5E7EB"/>
+    <use href="#yoyo-petted" transform="translate(75 16) scale(0.62)"/>
+    <text x="135" y="158" text-anchor="middle" font-size="16" font-weight="bold" fill="#1f2937">YOYO · Lv.1</text>
+
+    <text x="20" y="192" font-size="12" fill="#6b7280">Food</text>
+    <rect x="70" y="182" width="180" height="10" rx="5" fill="#EEF0F3"/>
+    <rect x="70" y="182" width="122" height="10" rx="5" fill="#FBBF24"/>
+
+    <text x="20" y="222" font-size="12" fill="#6b7280">Mood</text>
+    <rect x="70" y="212" width="180" height="10" rx="5" fill="#EEF0F3"/>
+    <rect x="70" y="212" width="150" height="10" rx="5" fill="#F472B6"/>
+
+    <text x="20" y="252" font-size="12" fill="#6b7280">Energy</text>
+    <rect x="70" y="242" width="180" height="10" rx="5" fill="#EEF0F3"/>
+    <rect x="70" y="242" width="86" height="10" rx="5" fill="#60A5FA"/>
+
+    <rect x="20" y="278" width="70" height="32" rx="8" fill="#6366F1"/>
+    <text x="55" y="299" text-anchor="middle" font-size="13" fill="#fff" font-weight="600">FEED</text>
+    <rect x="100" y="278" width="70" height="32" rx="8" fill="#fff" stroke="#6366F1"/>
+    <text x="135" y="299" text-anchor="middle" font-size="13" fill="#6366F1" font-weight="600">PET</text>
+    <rect x="180" y="278" width="70" height="32" rx="8" fill="#fff" stroke="#6366F1"/>
+    <text x="215" y="299" text-anchor="middle" font-size="13" fill="#6366F1" font-weight="600">PLAY</text>
+
+    <rect x="20" y="326" width="230" height="56" rx="10" fill="#F6F7F9"/>
+    <text x="34" y="349" font-size="12" fill="#6b7280">bubble: greet / complain / react</text>
+    <text x="34" y="368" font-size="12" fill="#6b7280">to workflow runs and daily login</text>
+  </g>
+
+  <!-- 收起态悬浮球 mock -->
+  <g transform="translate(905 330)">
+    <circle cx="34" cy="34" r="34" fill="#ffffff" stroke="#E5E7EB" stroke-width="2"/>
+    <ellipse cx="16" cy="17" rx="5" ry="4.5" fill="url(#yGrad)" transform="rotate(-25 16 17)"/>
+    <ellipse cx="52" cy="17" rx="5" ry="4.5" fill="url(#yGrad)" transform="rotate(25 52 17)"/>
+    <circle cx="34" cy="38" r="23" fill="url(#yGrad)"/>
+    <circle cx="34" cy="40" r="16.5" fill="#FFF6EA" stroke="#EFD6BC" stroke-width="1.5"/>
+    <circle cx="28" cy="38" r="2.4" fill="#2b2b2b"/>
+    <circle cx="40" cy="38" r="2.4" fill="#2b2b2b"/>
+    <circle cx="23" cy="43" r="1" fill="#E8968F"/>
+    <circle cx="25" cy="45" r="1" fill="#E8968F"/>
+    <circle cx="45" cy="43" r="1" fill="#E8968F"/>
+    <circle cx="43" cy="45" r="1" fill="#E8968F"/>
+    <path d="M31 44 Q34 47 37 44" stroke="#2b2b2b" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <circle cx="62" cy="8" r="7" fill="#F2604C"/>
+  </g>
+  <text x="939" y="414" text-anchor="middle" font-size="12" fill="#6b7280">collapsed ball</text>
+</svg>

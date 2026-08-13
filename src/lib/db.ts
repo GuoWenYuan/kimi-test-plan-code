@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
 /**
@@ -27,6 +28,11 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_id TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS api_tokens (
+  token TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS model_presets (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -42,13 +48,6 @@ CREATE TABLE IF NOT EXISTS knowledge_notes (
   content TEXT NOT NULL,
   PRIMARY KEY (user_id, slug)
 );
-CREATE TABLE IF NOT EXISTS workflows (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  tag TEXT NOT NULL,
-  graph TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
 CREATE TABLE IF NOT EXISTS prompt_templates (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -60,13 +59,72 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
 CREATE TABLE IF NOT EXISTS prompt_groups (
   name TEXT PRIMARY KEY
 );
-CREATE TABLE IF NOT EXISTS custom_nodes (
+-- 宠物池：全局实体，owner_user_id 为 NULL 表示待领养；一宠一主，被领养后他人不可再领养
+CREATE TABLE IF NOT EXISTS pets (
   id TEXT PRIMARY KEY,
+  owner_user_id TEXT,
   name TEXT NOT NULL,
-  description TEXT NOT NULL,
-  tag TEXT NOT NULL,
-  mode TEXT NOT NULL,
+  -- 主人为宠物选择的模型预设（宠物聊天用，主人自己的 key）
+  preset_id TEXT,
+  -- 外观 JSON：{ expressions: Record<表情名, 文件名>, stateMap: { idle?, hungry?, sleepy?, eating?, petted? }, prompts: Record<文件名, 累积生成描述> }
+  -- 资源文件存 data/pets/<id>/assets/，无映射时回退内置 public/pet/*.png
+  appearance TEXT NOT NULL DEFAULT '{}',
+  -- pi 多轮会话 id（pi 按 cwd + sessionId 归档，工作区 data/pets/<id>/workspace）
+  chat_session_id TEXT,
+  -- 三围 0-100：饱食/心情/精力，按真实时间衰减，读取时结算
+  hunger REAL NOT NULL,
+  mood REAL NOT NULL,
+  energy REAL NOT NULL,
+  last_tick_at INTEGER NOT NULL,
+  -- 各互动上次成功时间（ms），服务端冷却用
+  feed_at INTEGER NOT NULL DEFAULT 0,
+  pet_at INTEGER NOT NULL DEFAULT 0,
+  play_at INTEGER NOT NULL DEFAULT 0,
+  last_daily_bonus_at INTEGER NOT NULL DEFAULT 0,
+  adopted_at TEXT,
+  created_at TEXT NOT NULL
+);
+-- 宠物长期记忆：用户说"记住…"时经 PIAgent 精简后入库，对话时自动注入
+CREATE TABLE IF NOT EXISTS pet_memories (
+  id TEXT PRIMARY KEY,
+  pet_id TEXT NOT NULL,
   content TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+-- 远程设备：各机器 device-agent 心跳上报的本机工具清单，供 /tools 页远程打开（手机等外端）
+CREATE TABLE IF NOT EXISTS devices (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  -- JSON: [{toolId?, label, localPort, remoteUrl, token?, online}]
+  endpoints TEXT NOT NULL DEFAULT '[]',
+  last_seen INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(user_id, name)
+);
+-- 快捷指令：按用户隔离的预设 shell 指令；target = local（本机统一桥 workbench-bridge）/ server（workbench 容器，仅超管可执行）
+CREATE TABLE IF NOT EXISTS quick_commands (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  command TEXT NOT NULL,
+  target TEXT NOT NULL DEFAULT 'local',
+  timeout INTEGER NOT NULL DEFAULT 60,
+  created_at TEXT NOT NULL
+);
+-- 宠物定时任务：cron 到点后以宠物人设跑 PIAgent，结果回流给主人（notified_at 汇报标记）
+CREATE TABLE IF NOT EXISTS pet_tasks (
+  id TEXT PRIMARY KEY,
+  pet_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  cron TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  next_run_at INTEGER,
+  last_run_at INTEGER,
+  last_status TEXT,
+  last_result TEXT,
+  notified_at INTEGER,
   created_at TEXT NOT NULL
 );
 `;
@@ -132,23 +190,6 @@ function migrateSessionsJson(db: DatabaseSync): void {
   console.log(`[db] 已从 sessions.json 迁移会话数据`);
 }
 
-function migrateWorkflowsJson(db: DatabaseSync): void {
-  const file = path.join(DATA_DIR, "workflows.json");
-  if (!fs.existsSync(file) || tableCount(db, "workflows") > 0) return;
-  const rows = readJsonFile(file);
-  if (!Array.isArray(rows)) return;
-  const stmt = db.prepare(
-    "INSERT OR IGNORE INTO workflows (id, name, tag, graph, created_at) VALUES (?, ?, ?, ?, ?)"
-  );
-  for (const r of rows as Record<string, unknown>[]) {
-    if (typeof r?.id === "string") {
-      stmt.run(r.id, String(r.name ?? ""), String(r.tag ?? "默认") || "默认", JSON.stringify(r.graph ?? { nodes: [], edges: [], knowledge: "" }), String(r.createdAt ?? new Date().toISOString()));
-    }
-  }
-  markMigrated(file);
-  console.log(`[db] 已从 workflows.json 迁移工作流数据`);
-}
-
 function migratePromptsJson(db: DatabaseSync): void {
   const file = path.join(DATA_DIR, "prompts.json");
   if (!fs.existsSync(file) || tableCount(db, "prompt_groups") > 0 || tableCount(db, "prompt_templates") > 0) return;
@@ -172,23 +213,6 @@ function migratePromptsJson(db: DatabaseSync): void {
   }
   markMigrated(file);
   console.log(`[db] 已从 prompts.json 迁移提示词数据`);
-}
-
-function migrateCustomNodesJson(db: DatabaseSync): void {
-  const file = path.join(DATA_DIR, "custom-nodes.json");
-  if (!fs.existsSync(file) || tableCount(db, "custom_nodes") > 0) return;
-  const rows = readJsonFile(file);
-  if (!Array.isArray(rows)) return;
-  const stmt = db.prepare(
-    "INSERT OR IGNORE INTO custom_nodes (id, name, description, tag, mode, content, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-  );
-  for (const r of rows as Record<string, unknown>[]) {
-    if (typeof r?.id === "string") {
-      stmt.run(r.id, String(r.name ?? ""), String(r.description ?? ""), String(r.tag ?? "默认") || "默认", String(r.mode ?? "llm"), String(r.content ?? ""), String(r.createdAt ?? new Date().toISOString()));
-    }
-  }
-  markMigrated(file);
-  console.log(`[db] 已从 custom-nodes.json 迁移自定义节点数据`);
 }
 
 function listMdFiles(dir: string): string[] {
@@ -270,9 +294,7 @@ function migrateFromJson(db: DatabaseSync): void {
   try {
     migrateUsersJson(db);
     migrateSessionsJson(db);
-    migrateWorkflowsJson(db);
     migratePromptsJson(db);
-    migrateCustomNodesJson(db);
     migrateUsersDir(db);
   } catch (e) {
     // 迁移失败不阻断启动（数据仍在旧 JSON 备份中）
@@ -281,6 +303,56 @@ function migrateFromJson(db: DatabaseSync): void {
 }
 
 // ---------- 连接单例 ----------
+
+/**
+ * 旧 pets 表（user_id 主键，一人一宠）迁移为宠物池结构（id 主键 + owner_user_id）。
+ * 在 exec(DDL) 前把旧表改名让新表建出来，之后拷贝数据并删除旧表。幂等。
+ */
+function migrateLegacyPets(conn: DatabaseSync, phase: "before" | "after"): void {
+  const legacy = conn
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'pets'")
+    .get() as { name: string } | undefined;
+  const oldCopy = conn
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'pets_legacy'")
+    .get() as { name: string } | undefined;
+
+  if (phase === "before") {
+    if (!legacy) return;
+    const cols = conn.prepare("PRAGMA table_info(pets)").all() as { name: string }[];
+    if (cols.some((c) => c.name === "id")) return; // 已是新结构
+    conn.exec("ALTER TABLE pets RENAME TO pets_legacy");
+    return;
+  }
+
+  if (!oldCopy) return;
+  const rows = conn.prepare("SELECT * FROM pets_legacy").all() as Record<string, unknown>[];
+  const stmt = conn.prepare(
+    `INSERT OR IGNORE INTO pets
+       (id, owner_user_id, name, hunger, mood, energy, last_tick_at,
+        feed_at, pet_at, play_at, last_daily_bonus_at, adopted_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const now = new Date().toISOString();
+  for (const r of rows) {
+    stmt.run(
+      randomUUID(),
+      String(r.user_id ?? ""),
+      String(r.name ?? "YOYO"),
+      Number(r.hunger ?? 80),
+      Number(r.mood ?? 80),
+      Number(r.energy ?? 80),
+      Number(r.last_tick_at ?? Date.now()),
+      Number(r.feed_at ?? 0),
+      Number(r.pet_at ?? 0),
+      Number(r.play_at ?? 0),
+      Number(r.last_daily_bonus_at ?? 0),
+      String(r.adopted_at ?? now),
+      now
+    );
+  }
+  conn.exec("DROP TABLE pets_legacy");
+  console.log(`[db] 已将 ${rows.length} 只旧宠物迁移到宠物池结构`);
+}
 
 let db: DatabaseSync | null = null;
 
@@ -291,7 +363,21 @@ export function getDb(): DatabaseSync {
   }
   const conn = new DatabaseSync(DB_PATH);
   conn.exec("PRAGMA journal_mode=WAL;");
+  migrateLegacyPets(conn, "before");
   conn.exec(DDL);
+  // 幂等补列：pet_tasks 支持间隔型任务（NULL = cron 任务）
+  try {
+    conn.exec("ALTER TABLE pet_tasks ADD COLUMN interval_minutes INTEGER");
+  } catch {
+    // 列已存在
+  }
+  // 幂等补列：一次性任务的绝对触发时间（ms），执行后自动停用
+  try {
+    conn.exec("ALTER TABLE pet_tasks ADD COLUMN run_at INTEGER");
+  } catch {
+    // 列已存在
+  }
+  migrateLegacyPets(conn, "after");
   migrateFromJson(conn);
   db = conn;
   return conn;

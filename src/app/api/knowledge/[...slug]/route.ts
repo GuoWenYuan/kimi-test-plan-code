@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth";
+import { getApiUser } from "@/lib/auth";
 import { deleteNote, getBacklinks, readNote, updateNote } from "@/lib/knowledge";
 
 type Ctx = { params: Promise<{ slug: string[] }> };
@@ -10,7 +10,7 @@ async function toSlug(ctx: Ctx): Promise<string> {
 }
 
 export async function GET(req: Request, ctx: Ctx) {
-  const user = await getSessionUser();
+  const user = await getApiUser(req);
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
   const slug = await toSlug(ctx);
   const content = await readNote(user.id, slug);
@@ -22,7 +22,7 @@ export async function GET(req: Request, ctx: Ctx) {
 }
 
 export async function PUT(req: Request, ctx: Ctx) {
-  const user = await getSessionUser();
+  const user = await getApiUser(req);
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
   const slug = await toSlug(ctx);
   const body = await req.json().catch(() => null);
@@ -34,7 +34,7 @@ export async function PUT(req: Request, ctx: Ctx) {
 }
 
 export async function DELETE(req: Request, ctx: Ctx) {
-  const user = await getSessionUser();
+  const user = await getApiUser(req);
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
   const slug = await toSlug(ctx);
   const ok = await deleteNote(user.id, slug);

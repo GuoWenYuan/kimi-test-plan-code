@@ -28,6 +28,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/tools ./tools
 COPY --from=builder /app/unity-bridge ./unity-bridge
 COPY --from=builder /app/frame-embed.zip ./frame-embed.zip
+COPY --from=builder /app/usage-panel.zip ./usage-panel.zip
 EXPOSE 3000
 # 数据经 volume 挂载到 /app/data（SQLite app.db 与 pi-agent 会话）
 CMD ["npx", "next", "start", "-H", "0.0.0.0", "-p", "3000"]
